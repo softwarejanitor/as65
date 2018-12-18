@@ -327,7 +327,7 @@ my %mnemonics = (
   },
   'BMI' => {
     # BMI	Relative	BMI Oper	30	2	2
-    'Relative' => 0x0f,
+    'Relative' => 0x30,
   },
   'BNE' => {
     # BNE	Relative	BNE Oper	D0	2	2
@@ -770,8 +770,8 @@ sub sym_add {
 sub sym_sub {
   my ($symval, $offset) = @_;
 
-  if ($symval =~ /\$([0-9a-fA-F]+])/) {
-    return hex(lc($1)) + $offset;
+  if ($symval =~ /\$([0-9a-fA-F]+)/) {
+    return hex(lc($1)) - $offset;
   }
   return $symval - $offset;
 }
@@ -798,6 +798,9 @@ sub handle_8_bit_symbol_add {
   my $symval = $symbols{$symbol};
   if (defined $symval) {
     my $opval = sym_add($symval, $val);
+    if ($opval > 255) {
+      $opval -= 256;
+    }
     generate_16($ofh, $addr, $opcode, $opval);
   } else {
     print "**** $lineno - Unknown symbol '$symbol'\n";
@@ -812,6 +815,9 @@ sub handle_8_bit_symbol_sub {
   if (defined $symval) {
     my $opval = sym_sub($symval, $val);
     generate_16($ofh, $addr, $opcode, $opval);
+    if ($opval < 0) {
+      $opval += 256;
+    }
   } else {
     print "**** $lineno - Unknown symbol '$symbol'\n";
     generate_16($ofh, $addr, $opcode, 0x00);
@@ -1710,22 +1716,10 @@ sub generate_Indirect_Zero_Page {
   # Allow arithmetic on symbol
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\)$/) {
     # Add
-    my $symval = $symbols{$1};
-    if (defined $symval) {
-      my $opval = sym_add($symval, $2);
-      generate_16($ofh, $addr, $opcode, $opval);
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-    }
+    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\)$/) {
     # Subtract
-    my $symval = $symbols{$1};
-    if (defined $symval) {
-      my $opval = sym_sub($symval, $2);
-      generate_16($ofh, $addr, $opcode, $opval);
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-    }
+    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
     print ">>>> $lineno - Indirect_Zero_Page Bad Operand '$operand'\n";
   }
@@ -1780,7 +1774,12 @@ sub generate_Relative {
     if ($rel > 255) {
       $rel -= 256;
     }
-    generate_16($ofh, $addr, $opcode, $rel);
+    if ($rel < 0 || $rel > 255) {
+      print "^^^^ $lineno - Illegal Branch\n";
+      generate_16($ofh, $addr, $opcode, 0x00);
+    } else {
+      generate_16($ofh, $addr, $opcode, $rel);
+    }
   # Decode decimal
   } elsif ($operand =~ /^(\d+)$/) {
     my $rel = (0 - ($addr - $1)) + 254;
@@ -1790,7 +1789,12 @@ sub generate_Relative {
     if ($rel > 255) {
       $rel -= 256;
     }
-    generate_16($ofh, $addr, $opcode, $rel);
+    if ($rel < 0 || $rel > 255) {
+      print "^^^^ $lineno - Illegal Branch\n";
+      generate_16($ofh, $addr, $opcode, 0x00);
+    } else {
+      generate_16($ofh, $addr, $opcode, $rel);
+    }
   # Handle symbols
   } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)$/) {
     my $symval = $symbols{$1};
@@ -1809,7 +1813,12 @@ sub generate_Relative {
       if ($rel > 255) {
         $rel -= 256;
       }
-      generate_16($ofh, $addr, $opcode, $rel);
+      if ($rel < 0 || $rel > 255) {
+        print "^^^^ $lineno - Illegal Branch\n";
+        generate_16($ofh, $addr, $opcode, 0x00);
+      } else {
+        generate_16($ofh, $addr, $opcode, $rel);
+      }
     } else {
       print "**** $lineno - Unknown symbol '$1'\n";
     }
@@ -2132,8 +2141,8 @@ if (open($ifh, "<$input_file")) {
     my $ucmnemonic = uc($mnemonic);
 
     # Skip ORG and EQU on pass 2.
-    next if $ucmnemonic eq 'ORG';
-    next if $ucmnemonic eq 'EQU';
+    next if $ucmnemonic =~ /ORG/i;
+    next if $ucmnemonic =~ /EQU|\.EQ/i;
 
     if (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
