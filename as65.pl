@@ -1115,7 +1115,6 @@ sub generate_Zero_Page_X {
   # Handle symbol arithmetic
   } elsif ($operand =~ /^([A-Za-z\.][0-9a-zA-Z_\.]+)\s*[+]\s*(\d+),[Xx]$/) {
     # Add
-print "symbol=$1 addend=$2\n";
     handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
   } elsif ($operand =~ /^([A-Za-z\.][0-9a-zA-Z_\.]+)\s*[-]\s*(\d+),[Xx]$/) {
     # Subtract
