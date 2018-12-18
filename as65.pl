@@ -2003,6 +2003,7 @@ if (open($ifh, "<$input_file")) {
 
     # Skip comment lines.
     next if $line =~ /^\s*;/;
+    next if $line =~ /\*/;
 
     # Process .org lines.
     if ($line =~ /^\.org\s+(.+)/) {
@@ -2110,6 +2111,7 @@ if (open($ifh, "<$input_file")) {
 
     # Skip comment lines.
     next if $line =~ /^\s*;/;
+    next if $line =~ /\*/;
 
     # Skip .org lines.
     next if $line =~ /^\.org\s+.+/;
