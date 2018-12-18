@@ -1388,19 +1388,19 @@ sub generate_Indirect_Absolute_X {
 # STZ Abs,X	9E
 sub is_Absolute_X {
   my ($operand, $lineno) = @_;
-  if ($operand =~ /^[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
     return 2;
   } elsif ($operand =~ /^(\d{1,3}),[Xx]$/) {
     return 0 if $1 > 255;
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Xx]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Xx]$/) {
     # Not Ansolute,X if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
     }
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*(\d+),[Xx]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*(\d+),[Xx]$/) {
     # Not Ansolute,X if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
