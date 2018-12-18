@@ -733,9 +733,9 @@ my %mnemonics = (
 
 # Generate code for one byte instructions.
 sub generate_8 {
-  my ($ofh, $addr, $opcode, $opval) = @_;
+  my ($ofh, $addr, $opcode) = @_;
 
-  print sprintf(">>>> GENERATING %04x  %02x\n", $addr, $opcode) if $code_listing;
+  print sprintf("* %04x-  %02x\n", $addr, $opcode) if $code_listing;
   print $ofh pack("C", $opcode);
 }
 
@@ -743,7 +743,7 @@ sub generate_8 {
 sub generate_16 {
   my ($ofh, $addr, $opcode, $opval) = @_;
 
-  print sprintf(">>>> GENERATING %04x  %02x %02x\n", $addr, $opcode, $opval) if $code_listing;
+  print sprintf("* %04x-  %02x %02x\n", $addr, $opcode, $opval) if $code_listing;
   print $ofh pack("C", $opcode);
   print $ofh pack("C", $opval);
 }
@@ -752,7 +752,7 @@ sub generate_16 {
 sub generate_24 {
   my ($ofh, $addr, $opcode, $opval1, $opval2) = @_;
 
-  print sprintf(">>>> GENERATING %04x  %02x %02x %02x\n", $addr, $opcode, $opval1, $opval2) if $code_listing;
+  print sprintf("* %04x-  %02x %02x %02x\n", $addr, $opcode, $opval1, $opval2) if $code_listing;
   print $ofh pack("C", $opcode);
   print $ofh pack("C", $opval1);
   print $ofh pack("C", $opval2);
@@ -907,9 +907,6 @@ sub is_Immediate {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   # Allow arithmetic on symbol
@@ -921,9 +918,6 @@ sub is_Immediate {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   }
@@ -998,9 +992,6 @@ sub is_Zero_Page {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   # Allow symbol arithmetic
@@ -1013,9 +1004,6 @@ sub is_Zero_Page {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   }
@@ -1082,9 +1070,6 @@ sub is_Zero_Page_X {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*\d+,[Xx]$/) {
@@ -1096,9 +1081,6 @@ sub is_Zero_Page_X {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   }
@@ -1150,9 +1132,6 @@ sub is_Zero_Page_Y {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*\d+,[Yy]$/) {
@@ -1542,9 +1521,6 @@ sub is_Indirect_Zero_Page_X {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*(\d+),[Xx]\)/) {
@@ -1556,9 +1532,6 @@ sub is_Indirect_Zero_Page_X {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   }
@@ -1615,9 +1588,6 @@ sub is_Indirect_Zero_Page_Y {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*(\d+)\),[Yy]/) {
@@ -1629,9 +1599,6 @@ sub is_Indirect_Zero_Page_Y {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   }
@@ -2075,7 +2042,11 @@ if (open($ifh, "<$input_file")) {
       $symbol =~ s/:$//;
       print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
       $symbols{$symbol} = $operand;
-    } elsif ($ucmnemonic =~ /OBJ|CHK/i) {
+    } elsif ($ucmnemonic =~ /HEX/i) {
+      my $symbol = $label;
+      $symbol =~ s/:$//;
+      $symbols{$symbol} = sprintf("\$%04x", $addr);
+    } elsif ($ucmnemonic =~ /OBJ|CHK|HEX/i) {
       # Just ignore this
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
@@ -2102,7 +2073,7 @@ if (open($ifh, "<$input_file")) {
     print "---- Symbol table ----\n";
 
     foreach my $ky (keys %symbols) {
-      print "$ky :  $symbols{$ky}\n";
+      print sprintf("%-10s :  %s\n", $ky, $symbols{$ky});
     }
 
     print "\n";
@@ -2171,6 +2142,13 @@ if (open($ifh, "<$input_file")) {
       if (! $foundit) {
         print "!!!! Unrecognized operating mode $line!\n";
       }
+    } elsif ($ucmnemonic eq 'HEX') {
+      # Unpack hex data.
+      my @bytes  = map { pack('C', hex($_)) } ($operand =~ /(..)/g);
+      foreach my $byte (@bytes) {
+        generate_8($ofh, $addr, ord($byte));
+      }
+      generate_8($ofh, $addr, 0x00);
     } else {
       print "SYNTAX ERROR 2! $mnemonic\n";
     }
