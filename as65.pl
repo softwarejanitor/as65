@@ -1587,12 +1587,12 @@ sub generate_Indirect_Zero_Page_X {
 # STA (Zpg),Y	91
 sub is_Indirect_Zero_Page_Y {
   my ($operand, $lineno) = @_;
-  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\),[Yy]/) {
+  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\),[Yy]$/) {
     return 2;
   } elsif ($operand =~ /^\((\d+)\),[Yy]/) {
     return 0 if $1 > 255;
     return 2;
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\),[Yy]/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\),[Yy]$/) {
     # Not Indirect Zero Page,Y if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -2054,13 +2054,7 @@ if (open($ifh, "<$input_file")) {
       my $symbol = $label;
       $symbol =~ s/:$//;
       print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
-      if ($operand =~ /^\$([0-8a-fA-F]+)$/) {
-        $symbols{$symbol} = sprintf("\$%04x", hex(lc($1)));
-      } elsif ($operand =~ /^\$(\d+)$/) {
-        $symbols{$symbol} = sprintf("%d", $1);
-      } else {
-        $symbols{$symbol} = $operand;
-      }
+      $symbols{$symbol} = $operand;
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
