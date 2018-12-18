@@ -1674,7 +1674,6 @@ sub is_Indirect_Zero_Page {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-      return 0;
     }
     return 2;
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*(\d+)\)$/) {
@@ -1686,7 +1685,6 @@ sub is_Indirect_Zero_Page {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-      return 0;
     }
     return 2;
   }
