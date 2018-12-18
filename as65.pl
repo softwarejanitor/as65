@@ -14,7 +14,7 @@ my $verbose = 1;  # Print messages, default to on.
 my $debug = 0;  # Debug mode, default to off.  Very chatty if on.
 my $listing1 = 0;  # Listing for pass 1.
 my $listing2 = 0;  # Listing for pass 2.
-my $code_listing = 0;  # Generated code listing.
+my $code_listing = 1;  # Generated code listing.
 my $symbol_table = 1;  # Output symbol table.
 
 my %symbols = ();  # Hash of symbol table values.
@@ -26,17 +26,17 @@ my $output_file = '';  # Output file, required to be set with -o command line fl
 sub usage {
   print "Usage:\n";
   print "$0 [-a addr] [-x \$addr] [-v] [-q] [-d] [-s] [-l] [-l1] [-l2] [-c] [-h] <input_file>\n";
-  print " -a addr : Start address in decimal\n";
-  print " -x \$addr : Start address in hex\n";
+  print " -a addr : Start address in decimal (default 2048)\n";
+  print " -x \$addr : Start address in hex (default $800)\n";
   print " -o <output file> : Output file name (required).\n";
-  print " -v : Verbose\n";
-  print " -q : Quiet\n";
-  print " -d : Debug\n";
+  print " -v : Verbose (default on)\n";
+  print " -q : Quiet (default off)\n";
+  print " -d : Debug (default off)\n";
   print " -s : Symbol Table\n";
-  print " -l : Listing (both passes)\n";
-  print " -l1 : Listing (Pass 1)\n";
-  print " -l2 : Listing (Pass 2)\n";
-  print " -c : Generated code listing\n";
+  print " -l : Listing (both passes) (default off)\n";
+  print " -l1 : Listing (Pass 1) (default off)\n";
+  print " -l2 : Listing (Pass 2) (default off)\n";
+  print " -c : Generated code listing (default on)\n";
   print " -h : This help\n";
 }
 
@@ -88,7 +88,7 @@ while (defined $ARGV[0] && $ARGV[0] =~ /^-/) {
     shift;
   # Code listing.
   } elsif ($ARGV[0] eq '-c') {
-    $code_listing = 1;
+    $code_listing = 0;
     shift;
   # Help.
   } elsif ($ARGV[0] eq '-h') {
@@ -1988,7 +1988,7 @@ if (open($ifh, "<$input_file")) {
 
   print "**** Starting 1st pass ****\n" if $verbose;
 
-  print "\n\n" if $verbose;
+  print "\n" if $verbose;
 
   # Pass 1, build symbol table.
   while (my $line = readline $ifh) {
@@ -2030,7 +2030,7 @@ if (open($ifh, "<$input_file")) {
     my $rv;
 
     # Look for symbols.
-    if (defined $label && $label ne '' && $label ne ';') {
+    if (defined $label && $label ne '' && $label ne ';' && $mnemonic !~ /EQU|\.EQ/i) {
       my $symbol = $label;
       $symbol =~ s/:$//;
       print sprintf("%%%%%%%% Saving symbol $label %s \$%04x\n", $addr, $addr) if $verbose;
@@ -2048,9 +2048,19 @@ if (open($ifh, "<$input_file")) {
       $operand =~ s/^\$//;
       $base = hex(lc($operand));
       $addr = $base;
-    } elsif ($ucmnemonic =~ /EQU|\.EQ/) {
+      print "%%%% Setting base to $base\n" if $verbose;
+    } elsif ($ucmnemonic =~ /EQU|\.EQ/i) {
       # define constant
-      print "%%%% Saving Symbol $label = $operand\n";
+      my $symbol = $label;
+      $symbol =~ s/:$//;
+      print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
+      if ($operand =~ /^\$([0-8a-fA-F]+)$/) {
+        $symbols{$symbol} = sprintf("\$%04x", hex(lc($1)));
+      } elsif ($operand =~ /^\$(\d+)$/) {
+        $symbols{$symbol} = sprintf("%d", $1);
+      } else {
+        $symbols{$symbol} = $operand;
+      }
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
@@ -2070,7 +2080,7 @@ if (open($ifh, "<$input_file")) {
     }
   }
 
-  print "\n\n" if $verbose;
+  print "\n" if $verbose;
 
   if ($symbol_table) {
     print "---- Symbol table ----\n";
@@ -2079,12 +2089,12 @@ if (open($ifh, "<$input_file")) {
       print "$ky :  $symbols{$ky}\n";
     }
 
-    print "\n\n";
+    print "\n";
   }
 
   print "**** Starting 2nd pass ****\n" if $verbose;
 
-  print "\n\n" if $verbose;
+  print "\n" if $verbose;
 
   # Rewind to the beginning of the input file.
   seek($ifh, 0, 0);
