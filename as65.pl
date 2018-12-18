@@ -761,7 +761,7 @@ sub generate_24 {
 sub sym_add {
   my ($symval, $offset) = @_;
 
-  if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])/) {
+  if ($symval =~ /\$([0-9a-fA-F]+)/) {
     return hex(lc($1 + $offset));
   }
   return $symval + $offset;
@@ -770,7 +770,7 @@ sub sym_add {
 sub sym_sub {
   my ($symval, $offset) = @_;
 
-  if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])/) {
+  if ($symval =~ /\$([0-9a-fA-F]+])/) {
     return hex(lc($1 + $offset));
   }
   return $symval - $offset;
@@ -907,7 +907,7 @@ sub is_Immediate {
     }
     return 2;
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /#([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*(\d+)/) {
+  } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+-]\s*(\d+)$/) {
     my $symval = $symbols{$1};
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
@@ -938,10 +938,10 @@ sub generate_Immediate {
   } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]+)/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /#([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)/) {
+  } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)$/) {
     # Add
     handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /#([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)/) {
+  } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)$/) {
     # Subtract
     handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1027,10 +1027,10 @@ sub generate_Zero_Page {
   } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)$/) {
     # Add
     handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)$/) {
     # Subtract
     handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1110,10 +1110,10 @@ sub generate_Zero_Page_X {
   } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Xx]$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Handle symbol arithmatic
-  } elsif ($operand =~ /([^[A-Za-z\.][0-9a-zA-Z_\.]+)\s*[+]\s*(\d+),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.][0-9a-zA-Z_\.]+)\s*[+]\s*(\d+),[Xx]$/) {
     # Add
     handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /([^[A-Za-z\.][0-9a-zA-Z_\.]+)\s*[-]\s*(\d+),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.][0-9a-zA-Z_\.]+)\s*[-]\s*(\d+),[Xx]$/) {
     # Subtract
     handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1168,20 +1168,20 @@ sub is_Zero_Page_Y {
 sub generate_Zero_Page_Y {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$(\[0-9a-fA-F][0-9a-fA-F]),[Yy]/) {
+  if ($operand =~ /^\$(\[0-9a-fA-F][0-9a-fA-F]),[Yy]$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval);
   # Parse decimal
-  } elsif ($operand =~ /^(\d+),[Yy]/) {
+  } elsif ($operand =~ /^(\d+),[Yy]$/) {
     generate_16($ofh, $addr, $opcode, $1);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Yy]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Yy]$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Yy]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Yy]$/) {
     # Add
     handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+),[Yy]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+),[Yy]$/) {
     # Subtract
     handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1256,13 +1256,13 @@ sub generate_Absolute {
     my $opval2 = hex(lc(substr($opval, 2, 2)));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)$/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $operand);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)$/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)$/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1308,10 +1308,10 @@ sub generate_Indirect_Absolute {
   } elsif ($operand =~ /^\(([A-Za-z\.][0-9a-zA-Z]+)\)/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /\(([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\)/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /\(([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\)/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1357,10 +1357,10 @@ sub generate_Indirect_Absolute_X {
   } elsif ($operand =~ /^\(([A-Za-z\.][0-9a-zA-Z_]+)\),[Xx]$/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /\(([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\),[Xx]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\),[Xx]$/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /\(([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\),[Xx]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\),[Xx]$/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1425,13 +1425,13 @@ sub generate_Absolute_X {
     my $opval2 = hex(lc(substr($opval, 2, 2)));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Xx]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Xx]$/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Xx]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Xx]$/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+),[Xx]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+),[Xx]$/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1489,13 +1489,13 @@ sub generate_Absolute_Y {
     my $opval2 = hex(lc(substr($opval, 2, 2)));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Yy]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+),[Yy]$/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Yy]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Yy]$/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+),[Yy]/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+),[Yy]$/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1562,13 +1562,13 @@ sub generate_Indirect_Zero_Page_X {
   } elsif ($operand =~ /^\((\d+)\),[Xx]/) {
     generate_16($ofh, $addr, $opcode, $1);
   # Return symbol value
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+),[Xx]\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+),[Xx]\)$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $operand);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /\(([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Xx]\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Xx]\)$/) {
     # Add
     handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /\(([^[A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+),[Xx]\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+),[Xx]\)$/) {
     # Subtract
     handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1638,10 +1638,10 @@ sub generate_Indirect_Zero_Page_Y {
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\),[Yy]$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\),[Yy]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\),[Yy]$/) {
     # Add
     handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2);
-  } elsif ($operand =~ /\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\),[Yy]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\),[Yy]$/) {
     # Subtract
     handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2);
   } else {
@@ -1707,7 +1707,7 @@ sub generate_Indirect_Zero_Page {
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\)/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
-  } elsif ($operand =~ /\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\)/) {
     # Add
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1716,7 +1716,7 @@ sub generate_Indirect_Zero_Page {
     } else {
       print "**** $lineno - Unknown symbol '$1'\n";
     }
-  } elsif ($operand =~ /\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\)/) {
     # Subtract
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1770,7 +1770,7 @@ sub generate_Relative {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
 
   # Decode hex
-  if ($operand =~ /\$([0-9a-fA-F]{1,4})/) {
+  if ($operand =~ /^\$([0-9a-fA-F]{1,4}$)/) {
     my $opval = hex(lc($1));
     my $rel = (0 - ($addr - $opval)) + 254;
     if ($rel < 0) {
@@ -1791,7 +1791,7 @@ sub generate_Relative {
     }
     generate_16($ofh, $addr, $opcode, $rel);
   # Handle symbols
-  } elsif ($operand =~ /([A-Za-z\.][A-Za-z0-9_\.]+)/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)$/) {
     my $symval = $symbols{$1};
     if (defined $symval) {
       my $opval = lc($symval);
@@ -1813,7 +1813,7 @@ sub generate_Relative {
       print "**** $lineno - Unknown symbol '$1'\n";
     }
   # Handle symbol arithmatic
-  } elsif ($operand =~ /([A-Za-z\.][A-Za-z0-9_\.]+)\s*([+-])\s*(\d+)/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*([+-])\s*(\d+)$/) {
     my $symval = $symbols{$1};
     if (defined $symval) {
       my $opval = lc($symval);
