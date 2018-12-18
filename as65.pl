@@ -1101,10 +1101,7 @@ sub generate_Zero_Page_X {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
   if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F]),[Xx]$/) {
-    my $opval = $1;
-    if ($operand =~ /^\$/) {
-      $opval = hex(lc($1));
-    }
+    my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval);
   # Parse decimal
   } elsif ($operand =~ /^(\d+),[Xx]$/) {
@@ -1172,10 +1169,7 @@ sub generate_Zero_Page_Y {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
   if ($operand =~ /^\$(\[0-9a-fA-F][0-9a-fA-F]),[Yy]/) {
-    my $opval = $1;
-    if ($operand =~ /^\$/) {
-      $opval = hex(lc($1));
-    }
+    my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval);
   # Parse decimal
   } elsif ($operand =~ /^(\d+),[Yy]/) {
@@ -1560,10 +1554,9 @@ sub is_Indirect_Zero_Page_X {
 
 sub generate_Indirect_Zero_Page_X {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
-  my $opval = '';
   # Parse hex
   if ($operand =~ /^\(\$([0-9a-fA-f][0-9a-fA-f])\),[Xx]/) {
-    $opval = hex(lc($1));
+    my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\),[Xx]/) {
@@ -1594,7 +1587,7 @@ sub generate_Indirect_Zero_Page_X {
 # STA (Zpg),Y	91
 sub is_Indirect_Zero_Page_Y {
   my ($operand, $lineno) = @_;
-  if ($operand =~ /^\([0-9a-fA-F][0-9a-fA-F]\),[Yy]/) {
+  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\),[Yy]/) {
     return 2;
   } elsif ($operand =~ /^\((\d+)\),[Yy]/) {
     return 0 if $1 > 255;
@@ -1636,10 +1629,7 @@ sub generate_Indirect_Zero_Page_Y {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
   if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\),[Yy]$/) {
-    my $opval = $1;
-    if ($operand =~ /^\$/) {
-      $opval = hex(lc($1));
-    }
+    my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\),[Yy]$/) {
