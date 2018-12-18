@@ -831,7 +831,7 @@ sub handle_16_bit_symbol {
   if (defined $symval) {
     my $opval1 = 0;
     my $opval2 = 0;
-    if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])/) {
+    if ($symval =~ /\$([0-9a-fA-F]*[0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])/) {
       $opval1 = hex(lc($1));
       $opval2 = hex(lc($2));
     } else {
@@ -1227,7 +1227,7 @@ sub generate_Zero_Page_Y {
 # TSB Abs	0C
 sub is_Absolute {
   my ($operand, $lineno) = @_;
-  if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$/) {
     return 2;
   } elsif ($operand =~ /^\d+$/) {
     return 2;
@@ -1254,10 +1254,11 @@ sub is_Absolute {
 sub generate_Absolute {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F][0-9A-Fa-f][0-9A-Fa-f]$)/) {
-    my $opval1 = hex(lc(substr($1, 0, 2)));
-    my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+  if ($operand =~ /^\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]$)/) {
+    #my $opval1 = hex(lc(substr($1, 0, 2)));
+    #my $opval2 = hex(lc(substr($1, 2, 2)));
+    #generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+    generate_24($ofh, $addr, $opcode, $2, $1);
   # Parse decimal
   } elsif ($operand =~ /^(\d+)$/) {
     my $opval = sprintf("%04x", $1);
@@ -1303,10 +1304,11 @@ sub is_Indirect_Absolute {
 sub generate_Indirect_Absolute {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F][0-9A-Fa-f][0-9A-Fa-f])\)/) {
-    my $opval1 = hex(lc(substr($1, 0, 2)));
-    my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+  if ($operand =~ /^\(\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f])\)/) {
+    #my $opval1 = hex(lc(substr($1, 0, 2)));
+    #my $opval2 = hex(lc(substr($1, 2, 2)));
+    #generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+    generate_24($ofh, $addr, $opcode, $2, $1);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\)/) {
     my $opval = sprintf("%04x", $1);
@@ -1352,10 +1354,11 @@ sub is_Indirect_Absolute_X {
 sub generate_Indirect_Absolute_X {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F][0-9A-Fa-f][0-9A-Fa-f])\),[Xx]/) {
-    my $opval1 = hex(lc(substr($1, 0, 2)));
-    my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+  if ($operand =~ /^\(\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f])\),[Xx]/) {
+    #my $opval1 = hex(lc(substr($1, 0, 2)));
+    #my $opval2 = hex(lc(substr($1, 2, 2)));
+    #generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+    generate_24($ofh, $addr, $opcode, $2, $1);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\),[Xx]/) {
     my $opval = sprintf("%04x", $1);
@@ -1396,7 +1399,7 @@ sub generate_Indirect_Absolute_X {
 # STZ Abs,X	9E
 sub is_Absolute_X {
   my ($operand, $lineno) = @_;
-  if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
     return 2;
   } elsif ($operand =~ /^(\d{1,3}),[Xx]$/) {
     return 0 if $1 > 255;
@@ -1423,10 +1426,11 @@ sub is_Absolute_X {
 sub generate_Absolute_X {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F][0-9A-Fa-f][0-9A-Fa-f]),[Xx]/) {
-    my $opval1 = hex(lc(substr($1, 0, 2)));
-    my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+  if ($operand =~ /^\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Xx]/) {
+    #my $opval1 = hex(lc(substr($1, 0, 2)));
+    #my $opval2 = hex(lc(substr($1, 2, 2)));
+    #generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+    generate_24($ofh, $addr, $opcode, $2, $1);
   # Parse decimal
   } elsif ($operand =~ /^(\d+),[Xx]/) {
     my $opval = sprintf("%04x", $1);
@@ -1461,7 +1465,7 @@ sub generate_Absolute_X {
 # STA Abs,Y	99
 sub is_Absolute_Y {
   my ($operand, $lineno) = @_;
-  if ($operand =~ /^\$[0-9a-fA-F]{4},[Yy]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Yy]$/) {
     return 2;
   } elsif ($operand =~ /^\d+,[Yy]$/) {
     return 2;
@@ -1487,10 +1491,11 @@ sub is_Absolute_Y {
 sub generate_Absolute_Y {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F][0-9A-Fa-f][0-9A-Fa-f]),[Yy]/) {
-    my $opval1 = hex(lc(substr($1, 0, 2)));
-    my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+  if ($operand =~ /^\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Yy]/) {
+    #my $opval1 = hex(lc(substr($1, 0, 2)));
+    #my $opval2 = hex(lc(substr($1, 2, 2)));
+    #generate_24($ofh, $addr, $opcode, $opval2, $opval1);
+    generate_24($ofh, $addr, $opcode, $2, $1);
   # Parse decimal
   } elsif ($operand =~ /^(\d+),[Yy]/) {
     my $opval = sprintf("%04x", $1);
@@ -2070,7 +2075,7 @@ if (open($ifh, "<$input_file")) {
       $symbol =~ s/:$//;
       print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
       $symbols{$symbol} = $operand;
-    } elsif ($ucmnemonic eq 'OBJ') {
+    } elsif ($ucmnemonic =~ /OBJ|CHK/i) {
       # Just ignore this
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
@@ -2150,7 +2155,7 @@ if (open($ifh, "<$input_file")) {
     # Skip ORG, EQU and OBJ on pass 2.
     next if $ucmnemonic =~ /ORG/i;
     next if $ucmnemonic =~ /EQU|\.EQ/i;
-    next if $ucmnemonic =~ /OBJ/i;
+    next if $ucmnemonic =~ /OBJ|CHK/i;
 
     if (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
