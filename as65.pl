@@ -979,6 +979,9 @@ sub is_Zero_Page {
   my ($operand, $lineno) = @_;
   if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/) {
     return 2;
+  } elsif ($operand =~ /^(\d+)$/) {
+    return 0 if $1 > 255;
+    return 2;
   # Handle symbols
   } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)$/) {
     # Not Zero Page if the symbol is not 8 bits.
@@ -1169,7 +1172,7 @@ sub is_Zero_Page_Y {
 sub generate_Zero_Page_Y {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$(\[0-9a-fA-F][0-9a-fA-F]),[Yy]$/) {
+  if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F]),[Yy]$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval);
   # Parse decimal
@@ -1515,7 +1518,7 @@ sub generate_Absolute_Y {
 # STA (Zpg,X)	81
 sub is_Indirect_Zero_Page_X {
   my ($operand, $lineno) = @_;
-  if ($operand =~ /^\([0-9a-fA-F][0-9a-fA-F],[Xx]\)$/) {
+  if ($operand =~ /^\(\$[0-9a-fA-F][0-9a-fA-F],[Xx]\)$/) {
     return 2;
   } elsif ($operand =~ /^\((\d+),[Xx]\)$/) {
     return 0 if $1 > 255;
@@ -1556,7 +1559,7 @@ sub is_Indirect_Zero_Page_X {
 sub generate_Indirect_Zero_Page_X {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-f][0-9a-fA-f])\),[Xx]/) {
+  if ($operand =~ /^\(\$([0-9a-fA-f][0-9a-fA-f]),[Xx]\)$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval);
   # Parse decimal
@@ -1696,17 +1699,17 @@ sub is_Indirect_Zero_Page {
 sub generate_Indirect_Zero_Page {
   my ($addr, $operand, $opcode, $ofh, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\($([0-9a-fA-F][0-9a-fA-F])\)/) {
+  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\)$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\)/) {
     generate_16($ofh, $addr, $opcode, $1);
   # Return symbol value
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\)$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+)\)$/) {
     # Add
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1715,7 +1718,7 @@ sub generate_Indirect_Zero_Page {
     } else {
       print "**** $lineno - Unknown symbol '$1'\n";
     }
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[-]\s*(\d+)\)$/) {
     # Subtract
     my $symval = $symbols{$1};
     if (defined $symval) {
