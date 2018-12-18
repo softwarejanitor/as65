@@ -1975,6 +1975,11 @@ sub parse_line {
     $mnemonic = $1;
     $operand = '';
     $comment = $2;
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(;.+)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = '';
+    $comment = $4;
   } else {
     print "SYNTAX ERROR!  $lineno : $line\n";
   }
@@ -2065,6 +2070,8 @@ if (open($ifh, "<$input_file")) {
       $symbol =~ s/:$//;
       print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
       $symbols{$symbol} = $operand;
+    } elsif ($ucmnemonic eq 'OBJ') {
+      # Just ignore this
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
@@ -2140,9 +2147,10 @@ if (open($ifh, "<$input_file")) {
 
     my $ucmnemonic = uc($mnemonic);
 
-    # Skip ORG and EQU on pass 2.
+    # Skip ORG, EQU and OBJ on pass 2.
     next if $ucmnemonic =~ /ORG/i;
     next if $ucmnemonic =~ /EQU|\.EQ/i;
+    next if $ucmnemonic =~ /OBJ/i;
 
     if (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
