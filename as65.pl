@@ -2043,6 +2043,7 @@ if (open($ifh, "<$input_file")) {
       print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
       $symbols{$symbol} = $operand;
     } elsif ($ucmnemonic =~ /HEX/i) {
+      $addr++;
       my $symbol = $label;
       $symbol =~ s/:$//;
       $symbols{$symbol} = sprintf("\$%04x", $addr);
