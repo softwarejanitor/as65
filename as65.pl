@@ -199,9 +199,9 @@ my %mnemonics = (
     # 		Absolute,Y	ADC Abs,Y	79	3	4
     'Absolute_Y' => 0x79,
     # 		(Zero Page,X)	ADC (Zpg,X)	61	2	6
-    'Zero_Page_X' => 0x61,
+    'Indirect_Zero_Page_X' => 0x61,
     # 		(Zero Page),Y	ADC (Zpg),Y	71	2	5
-    'Zero_Page_Y' => 0x71,
+    'Indirect_Zero_Page_Y' => 0x71,
     # 		(Zero Page)	ADC (Zpg)	72	2	5
     'Indirect_Zero_Page' => 0x72,
   },
@@ -1223,7 +1223,7 @@ sub is_Absolute {
   } elsif ($operand =~ /^\d+$/) {
     return 2;
   # handle symbols
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)/) {
+  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)$/) {
     # Not Ansolute if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1563,7 +1563,7 @@ sub generate_Indirect_Zero_Page_X {
     generate_16($ofh, $addr, $opcode, $1);
   # Return symbol value
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+),[Xx]\)$/) {
-    handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $operand);
+    handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1);
   # Allow arithmatic on symbol
   } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]+)\s*[+]\s*(\d+),[Xx]\)$/) {
     # Add
