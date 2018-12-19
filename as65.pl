@@ -1963,6 +1963,26 @@ sub parse_line {
     $mnemonic = $2;
     $operand = '';
     $comment = $4;
+  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+")\s+(;.+)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $4;
+  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+")\s+(;.+)$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = $3;
+  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+")\s*$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = '';
+  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+")\s*$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = '';
   } else {
     print "SYNTAX ERROR!  $lineno : $line\n";
   }
