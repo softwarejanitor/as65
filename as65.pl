@@ -800,7 +800,7 @@ sub handle_8_bit_symbol {
     }
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   } else {
-    print "**** $lineno - Unknown symbol '$symbol'\n";
+    print "**** $lineno - Unknown symbol '$symbol' in '$line'\n";
     generate_16($ofh, $addr, $opcode, 0x00, $lineno, $line);
   }
 }
@@ -816,7 +816,7 @@ sub handle_8_bit_symbol_add {
     }
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   } else {
-    print "**** $lineno - Unknown symbol '$symbol'\n";
+    print "**** $lineno - Unknown symbol '$symbol' in '$line'\n";
     generate_16($ofh, $addr, $opcode, 0x00, $lineno, $line);
   }
 }
@@ -832,7 +832,7 @@ sub handle_8_bit_symbol_sub {
       $opval += 256;
     }
   } else {
-    print "**** $lineno - Unknown symbol '$symbol'\n";
+    print "**** $lineno - Unknown symbol '$symbol in '$line''\n";
     generate_16($ofh, $addr, $opcode, 0x00, $lineno, $line);
   }
 }
@@ -854,7 +854,7 @@ sub handle_16_bit_symbol {
     }
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   } else {
-    print "**** $lineno - Unknown symbol '$symbol'\n";
+    print "**** $lineno - Unknown symbol '$symbol in '$line''\n";
     generate_24($ofh, $addr, $opcode, 0x00, 0x00, $lineno, $line);
   }
 }
@@ -870,7 +870,7 @@ sub handle_16_bit_symbol_add {
     my $opval2 = hex(substr($opv, 2, 2));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   } else {
-    print "**** $lineno - Unknown symbol '$symbol'\n";
+    print "**** $lineno - Unknown symbol '$symbol in '$line''\n";
     generate_24($ofh, $addr, $opcode, 0x00, 0x00, $lineno, $line);
   }
 }
@@ -886,7 +886,7 @@ sub handle_16_bit_symbol_sub {
     my $opval2 = hex(substr($opv, 2, 2));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   } else {
-    print "**** $lineno - Unknown symbol '$symbol'\n";
+    print "**** $lineno - Unknown symbol '$symbol in '$line''\n";
     generate_24($ofh, $addr, $opcode, 0x00, 0x00, $lineno, $line);
   }
 }
@@ -1156,9 +1156,6 @@ sub is_Zero_Page_Y {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
       }
-    } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
-      return 0;
     }
     return 2;
   }
@@ -1801,7 +1798,7 @@ sub generate_Relative {
         generate_16($ofh, $addr, $opcode, $rel, $lineno, $line);
       }
     } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
+      print "**** $lineno - Unknown symbol '$1' in '$line'\n";
     }
   # Handle symbol arithmetic
   } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]+)\s*([+-])\s*(\d+)$/) {
@@ -1829,7 +1826,7 @@ sub generate_Relative {
       }
       generate_16($ofh, $addr, $opcode, $rel, $lineno, $line);
     } else {
-      print "**** $lineno - Unknown symbol '$1'\n";
+      print "**** $lineno - Unknown symbol '$1' in '$line'\n";
     }
   } else {
     print ">>>> $lineno - Relative Bad Operand '$operand'\n";
@@ -2090,7 +2087,7 @@ if (open($ifh, "<$input_file")) {
       }
       my ($str) = $operand =~ /^\"(.+)\"$/;
       $addr += length($str);
-    } elsif ($ucmnemonic =~ /OBJ|CHK/i) {
+    } elsif ($ucmnemonic =~ /OBJ|CHK|LST/i) {
       # Just ignore this
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
@@ -2161,7 +2158,7 @@ if (open($ifh, "<$input_file")) {
     my $ucmnemonic = uc($mnemonic);
 
     # Skip ORG, EQU and OBJ on pass 2.
-    if ($ucmnemonic =~ /ORG|EQU|\.EQ|OBJ/) {
+    if ($ucmnemonic =~ /ORG|EQU|\.EQ|OBJ|LST/) {
       print sprintf("                 %-4d  $line\n", $lineno, $line) if $code_listing;
       next;
     }
