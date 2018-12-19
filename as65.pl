@@ -23,6 +23,8 @@ my $base = 0x800;  # Default base address.  Overide with -a (decimal) or -x (hex
 
 my $output_file = '';  # Output file, required to be set with -o command line flag.
 
+my $checksum = 0;
+
 sub usage {
   print "Usage:\n";
   print "$0 [-a addr] [-x \$addr] [-v] [-q] [-d] [-s] [-l] [-l1] [-l2] [-c] [-h] <input_file>\n";
@@ -739,12 +741,20 @@ my %mnemonics = (
   },
 );
 
+sub calc_checksum {
+  my ($byte) = @_;
+
+  $checksum ^= $byte;
+}
+
 # Generate code for one byte instructions.
 sub generate_8 {
   my ($ofh, $addr, $opcode) = @_;
 
   print sprintf("* %04x-  %02x\n", $addr, $opcode) if $code_listing;
   print $ofh pack("C", $opcode);
+
+  calc_checksum($opcode);
 }
 
 # Generate code for two byte instructions.
@@ -754,6 +764,9 @@ sub generate_16 {
   print sprintf("* %04x-  %02x %02x\n", $addr, $opcode, $opval) if $code_listing;
   print $ofh pack("C", $opcode);
   print $ofh pack("C", $opval);
+
+  calc_checksum($opcode);
+  calc_checksum($opval);
 }
 
 # Generate code for three byte instructions.
@@ -764,6 +777,10 @@ sub generate_24 {
   print $ofh pack("C", $opcode);
   print $ofh pack("C", $opval1);
   print $ofh pack("C", $opval2);
+
+  calc_checksum($opcode);
+  calc_checksum($opval1);
+  calc_checksum($opval2);
 }
 
 sub sym_add {
@@ -2045,20 +2062,31 @@ if (open($ifh, "<$input_file")) {
       $operand =~ s/^\$//;
       $base = hex(lc($operand));
       $addr = $base;
-      print "%%%% Setting base to $base\n" if $verbose;
+      print sprintf("%%%%%%%% Setting base to \$%04x\n", $base) if $verbose;
     } elsif ($ucmnemonic =~ /EQU|\.EQ/i) {
       # define constant
       my $symbol = $label;
       $symbol =~ s/:$//;
       print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
       $symbols{$symbol} = $operand;
-    } elsif ($ucmnemonic =~ /HEX|ASC/i) {
-      $addr++;
-      my $symbol = $label;
-      $symbol =~ s/:$//;
-      $symbols{$symbol} = sprintf("\$%04x", $addr);
+    } elsif ($ucmnemonic =~ /HEX/i) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbol =~ s/:$//;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      if ($operand =~ /([0-9a-fA-F]+)/) {
+         $addr += (length($1) / 2);
+      }
+    } elsif ($ucmnemonic =~ /ASC/i) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbol =~ s/:$//;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      my ($str) = $operand =~ /^\"(.+)\"$/;
+      $addr += length($str);
     } elsif ($ucmnemonic =~ /OBJ|CHK/i) {
-      ##FIXME -- need to implement checksum
       # Just ignore this
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
@@ -2082,7 +2110,7 @@ if (open($ifh, "<$input_file")) {
   print "\n" if $verbose;
 
   if ($symbol_table) {
-    print "---- Symbol table ----\n";
+    print "---- Symbol table ----\n\n";
 
     foreach my $ky (keys %symbols) {
       print sprintf("%-10s :  %s\n", $ky, $symbols{$ky});
@@ -2102,6 +2130,7 @@ if (open($ifh, "<$input_file")) {
 
   $addr = $base;
   $lineno = 0;
+  $checksum = 0;
 
   # Pass two, generate output
   open($ofh, ">$output_file") or die "Can't write $output_file\n";
@@ -2138,7 +2167,7 @@ if (open($ifh, "<$input_file")) {
     # Skip ORG, EQU and OBJ on pass 2.
     next if $ucmnemonic =~ /ORG/i;
     next if $ucmnemonic =~ /EQU|\.EQ/i;
-    next if $ucmnemonic =~ /OBJ|CHK/i;
+    next if $ucmnemonic =~ /OBJ/i;
 
     if (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
@@ -2159,6 +2188,7 @@ if (open($ifh, "<$input_file")) {
       my @bytes  = map { pack('C', hex($_)) } ($operand =~ /(..)/g);
       foreach my $byte (@bytes) {
         generate_8($ofh, $addr, ord($byte));
+        $addr++;
       }
     } elsif ($ucmnemonic eq 'ASC') {
       # Unpack string dats.
@@ -2166,7 +2196,10 @@ if (open($ifh, "<$input_file")) {
       my @bytes  = map { pack('C', ord($_)) } ($str =~ /(.)/g);
       foreach my $byte (@bytes) {
         generate_8($ofh, $addr, ord($byte) + 128);
+        $addr++;
       }
+    } elsif ($ucmnemonic eq 'CHK') {
+      generate_8($ofh, $addr, $checksum);
     } else {
       print "$lineno - Unknown mnemonic '$mnemonic'\n";
     }
