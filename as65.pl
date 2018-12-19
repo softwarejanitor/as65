@@ -565,6 +565,10 @@ my %mnemonics = (
     # PHA	Implied		PHA		48	1	3
     'Implied' => 0x48,
   },
+  'PHP' => {
+    # PHP	Implied		PHP		08	1	3
+    'Implied' => 0x48,
+  },
   'PHX' => {
     # PHX	Implied		PHX		DA	1	3
     'Implied' => 0xda,
@@ -576,6 +580,10 @@ my %mnemonics = (
   'PLA' => {
     # PLA	Implied		PLA		68	1	4
     'Implied' => 0x68,
+  },
+  'PLP' => {
+    # PLP	Implied		PLP		68	1	4
+    'Implied' => 0x28,
   },
   'PLX' => {
     # PLX	Implied		PLX		FA	1	4
@@ -1840,9 +1848,11 @@ sub generate_Relative {
 # INY		C8
 # NOP		EA
 # PHA		48
+# PHP		08
 # PHX		DA
 # PHY		5A
 # PLA		68
+# PLP		28
 # PLX		FA
 # PLY		7A
 # RTI		40
