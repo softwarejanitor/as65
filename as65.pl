@@ -567,7 +567,7 @@ my %mnemonics = (
   },
   'PHP' => {
     # PHP	Implied		PHP		08	1	3
-    'Implied' => 0x48,
+    'Implied' => 0x08,
   },
   'PHX' => {
     # PHX	Implied		PHX		DA	1	3
