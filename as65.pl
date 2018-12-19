@@ -2052,12 +2052,13 @@ if (open($ifh, "<$input_file")) {
       $symbol =~ s/:$//;
       print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
       $symbols{$symbol} = $operand;
-    } elsif ($ucmnemonic =~ /HEX/i) {
+    } elsif ($ucmnemonic =~ /HEX|ASC/i) {
       $addr++;
       my $symbol = $label;
       $symbol =~ s/:$//;
       $symbols{$symbol} = sprintf("\$%04x", $addr);
-    } elsif ($ucmnemonic =~ /OBJ|CHK|HEX/i) {
+    } elsif ($ucmnemonic =~ /OBJ|CHK/i) {
+      ##FIXME -- need to implement checksum
       # Just ignore this
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
@@ -2071,10 +2072,10 @@ if (open($ifh, "<$input_file")) {
         }
       }
       if (! $foundit) {
-        print "!!!! Unrecognized operating mode $line!\n";
+        print "!!!! $lineno - Unrecognized addressing mode '$line'!\n";
       }
     } else {
-      print "SYNTAX ERROR 1! $mnemonic\n";
+      print "$lineno - Unknown mnemonic '$mnemonic'\n";
     }
   }
 
@@ -2112,7 +2113,7 @@ if (open($ifh, "<$input_file")) {
 
     $lineno++;
 
-    print sprintf("%4d %5d \$%04x |  %s\n", $lineno, $addr, $addr, $line) if $listing1;
+    print sprintf("%4d %5d \$%04x |  %s\n", $lineno, $addr, $addr, $line) if $listing2;
 
     # Skip blank lines.
     next if $line =~ /^\s*$/;
@@ -2151,7 +2152,7 @@ if (open($ifh, "<$input_file")) {
         }
       }
       if (! $foundit) {
-        print "!!!! Unrecognized operating mode $line!\n";
+        print "!!!! $lineno - Unrecognized addressing mode '$line'!\n";
       }
     } elsif ($ucmnemonic eq 'HEX') {
       # Unpack hex data.
@@ -2159,9 +2160,15 @@ if (open($ifh, "<$input_file")) {
       foreach my $byte (@bytes) {
         generate_8($ofh, $addr, ord($byte));
       }
-      generate_8($ofh, $addr, 0x00);
+    } elsif ($ucmnemonic eq 'ASC') {
+      # Unpack string dats.
+      my ($str) = $operand =~ /^\"(.+)\"$/;
+      my @bytes  = map { pack('C', ord($_)) } ($str =~ /(.)/g);
+      foreach my $byte (@bytes) {
+        generate_8($ofh, $addr, ord($byte) + 128);
+      }
     } else {
-      print "SYNTAX ERROR 2! $mnemonic\n";
+      print "$lineno - Unknown mnemonic '$mnemonic'\n";
     }
   }
 
