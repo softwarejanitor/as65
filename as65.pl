@@ -2145,7 +2145,7 @@ if (open($ifh, "<$input_file")) {
 
     # Skip blank lines, comment lines, .org .alias.
     if ($line =~ /^\s*$|^\s*;|^\s*\*|^\.org\s+.+|^\.alias\s+\S+\s+.+/) {
-      print sprintf("                 %-4d  $line\n", $lineno, $line) if $code_listing;
+      print sprintf("                 %-4d  %s\n", $lineno, $line) if $code_listing;
       next;
     }
 
@@ -2159,7 +2159,7 @@ if (open($ifh, "<$input_file")) {
 
     # Skip ORG, EQU and OBJ on pass 2.
     if ($ucmnemonic =~ /ORG|EQU|\.EQ|OBJ|LST/) {
-      print sprintf("                 %-4d  $line\n", $lineno, $line) if $code_listing;
+      print sprintf("                 %-4d  %s\n", $lineno, $line) if $code_listing;
       next;
     }
 
