@@ -12,8 +12,7 @@ use strict;
 
 my $verbose = 1;  # Print messages, default to on.
 my $debug = 0;  # Debug mode, default to off.  Very chatty if on.
-my $listing1 = 0;  # Listing for pass 1.
-my $listing2 = 0;  # Listing for pass 2.
+my $listing = 0;  # Listing for pass 1.
 my $code_listing = 1;  # Generated code listing.
 my $symbol_table = 1;  # Output symbol table.
 
@@ -35,9 +34,7 @@ sub usage {
   print " -q : Quiet (default off)\n";
   print " -d : Debug (default off)\n";
   print " -s : Symbol Table\n";
-  print " -l : Listing (both passes) (default off)\n";
-  print " -l1 : Listing (Pass 1) (default off)\n";
-  print " -l2 : Listing (Pass 2) (default off)\n";
+  print " -l : Listing (source pass 1) (default off)\n";
   print " -c : Generated code listing (default on)\n";
   print " -h : This help\n";
 }
@@ -75,18 +72,9 @@ while (defined $ARGV[0] && $ARGV[0] =~ /^-/) {
   } elsif ($ARGV[0] eq '-s') {
     $symbol_table = 0;
     shift;
-  # Listing (both passes).
+  # Listing (pass 1).
   } elsif ($ARGV[0] eq '-l') {
-    $listing1 = 1;
-    $listing2 = 1;
-    shift;
-  # Pass 1 listing.
-  } elsif ($ARGV[0] eq '-l1') {
-    $listing1 = 1;
-    shift;
-  # Pass 2 listing.
-  } elsif ($ARGV[0] eq '-l2') {
-    $listing2 = 1;
+    $listing = 1;
     shift;
   # Code listing.
   } elsif ($ARGV[0] eq '-c') {
@@ -2006,7 +1994,7 @@ if (open($ifh, "<$input_file")) {
 
     $lineno++;
 
-    print sprintf("%4d %5d \$%04x |  %s\n", $lineno, $addr, $addr, $line) if $listing1;
+    print sprintf("%04x:  %-4d  %s\n", $addr, $lineno, $line) if $listing;
 
     # Skip blank lines.
     next if $line =~ /^\s*$/;
@@ -2137,8 +2125,6 @@ if (open($ifh, "<$input_file")) {
     chomp $line;
 
     $lineno++;
-
-    print sprintf("%4d %5d \$%04x |  %s\n", $lineno, $addr, $addr, $line) if $listing2;
 
     # Skip blank lines, comment lines, .org .alias.
     if ($line =~ /^\s*$|^\s*;|^\s*\*|^\.org\s+.+|^\.alias\s+\S+\s+.+/) {
