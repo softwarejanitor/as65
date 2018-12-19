@@ -1945,7 +1945,7 @@ sub parse_line {
     $mnemonic = '';
     $operand = '';
     $comment = '';
-  } elsif ($line =~ /^(\S+)\s+(\S+)$/) {
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s*$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = '';
@@ -1981,7 +1981,7 @@ sub parse_line {
     $operand = $2;
     $comment = '';
   } else {
-    print "SYNTAX ERROR!  $lineno : $line\n";
+    print sprintf("SYNTAX ERROR!    %-4d  %s\n", $lineno, $line);
   }
 
   $label = '' unless defined $label;
