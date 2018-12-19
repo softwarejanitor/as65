@@ -1913,7 +1913,7 @@ sub parse_line {
   my ($line, $lineno) = @_;
 
   my ($label, $mnemonic, $operand, $comment) = ('', '', '', '');
-  if ($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s+(;.+)$/) {
+  if ($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s+(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = $3;
@@ -1923,7 +1923,7 @@ sub parse_line {
     $mnemonic = $2;
     $operand = $3;
     $comment = '';
-  } elsif ($line =~ /^\s+(\S+)\s+(\S+)\s+(;.+)$/) {
+  } elsif ($line =~ /^\s+(\S+)\s+(\S+)\s+(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = $2;
@@ -1933,7 +1933,7 @@ sub parse_line {
     $mnemonic = $1;
     $operand = $2;
     $comment = '';
-  } elsif ($line =~ /^\s+(\S+)\s+;\s*$/) {
+  } elsif ($line =~ /^\s+(\S+)\s+(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = '';
@@ -1953,22 +1953,22 @@ sub parse_line {
     $mnemonic = $2;
     $operand = '';
     $comment = '';
-  } elsif ($line =~ /^\s+(\S+)\s+(;.+)$/) {
+  } elsif ($line =~ /^\s+(\S+)\s+(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = '';
     $comment = $2;
-  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(;.+)$/) {
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = '';
-    $comment = $4;
-  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+")\s+(;.+)$/) {
+    $comment = $3;
+  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+")\s+(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = $3;
     $comment = $4;
-  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+")\s+(;.+)$/) {
+  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+")\s+(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = $2;
@@ -2021,7 +2021,7 @@ if (open($ifh, "<$input_file")) {
 
     # Skip comment lines.
     next if $line =~ /^\s*;/;
-    next if $line =~ /\*/;
+    next if $line =~ /^\s*\*/;
 
     # Process .org lines.
     if ($line =~ /^\.org\s+(.+)/) {
