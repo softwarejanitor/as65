@@ -1062,6 +1062,9 @@ sub is_Zero_Page {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   # Allow symbol arithmetic
@@ -1074,6 +1077,9 @@ sub is_Zero_Page {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   }
@@ -1149,6 +1155,9 @@ sub is_Zero_Page_X {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]|^%[01]{8}$$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*\$*[0-9a-fA-F]+,[Xx]$/) {
@@ -1160,6 +1169,9 @@ sub is_Zero_Page_X {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]|^%[01]{8}$$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   }
@@ -1220,6 +1232,9 @@ sub is_Zero_Page_Y {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*\$*[0-9a-fA-F]+,[Yy]$/) {
@@ -1231,6 +1246,9 @@ sub is_Zero_Page_Y {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   }
@@ -1652,6 +1670,9 @@ sub is_Indirect_Zero_Page_X {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\$*[0-9a-fA-F]+),[Xx]\)/) {
@@ -1663,6 +1684,9 @@ sub is_Indirect_Zero_Page_X {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   }
@@ -1728,6 +1752,9 @@ sub is_Indirect_Zero_Page_Y {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\$*[0-9a-fA-F]+)\),[Yy]/) {
@@ -1739,6 +1766,9 @@ sub is_Indirect_Zero_Page_Y {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   }
@@ -1804,6 +1834,9 @@ sub is_Indirect_Zero_Page {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\$*[0-9a-fA-F]+)\)$/) {
@@ -1815,6 +1848,9 @@ sub is_Indirect_Zero_Page {
       } else {
         return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
+    } else {
+      # Assume that forward declared symbols are addresses.
+      return 0;
     }
     return 2;
   }
