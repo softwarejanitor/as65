@@ -472,7 +472,7 @@ my %mnemonics = (
     'Absolute' => 0x20,
   },
   'LDA' => {
-      # LDA	Immediate	LDA #Oper	A9	2	2
+    # LDA	Immediate	LDA #Oper	A9	2	2
     'Immediate' => 0xa9,
     # 		Zero Page	LDA Zpg		A5	2	3
     'Zero_Page' => 0xa5,
@@ -776,6 +776,9 @@ sub sym_add {
 
   if ($symval =~ /\$([0-9a-fA-F]+)/) {
     return hex(lc($1)) + $offset;
+  } elsif ($symval =~ /%([01]{8})/) {
+    my $byte = unpack('C', pack("B8", $1));
+    return $byte + $offset;
   }
   return $symval + $offset;
 }
@@ -785,6 +788,9 @@ sub sym_sub {
 
   if ($symval =~ /\$([0-9a-fA-F]+)/) {
     return hex(lc($1)) - $offset;
+  } elsif ($symval =~ /%([01]{8})/) {
+    my $byte = unpack('C', pack("B8", $1));
+    return $byte - $offset;
   }
   return $symval - $offset;
 }
@@ -792,25 +798,47 @@ sub sym_sub {
 sub handle_8_bit_symbol {
   my ($ofh, $lineno, $addr, $opcode, $symbol, $line) = @_;
 
-  my $symval = $symbols{$symbol};
-  if (defined $symval) {
-    my $opval = $symval;
-    if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])/) {
-      $opval = hex(lc($1));
+  if ($symbol =~ /^[>]/) {
+    my ($sym) = $symbol =~ /[>](.+)/;
+    my $symval = $symbols{$sym};
+    if (defined $symval) {
+      my $opval = $symval;
+      if ($symval =~ /\$[0-9a-fA-F]*([0-9a-fA-F][0-9a-fA-F])$/) {
+        $opval = hex(lc($1));
+      }
+      generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+    } else {
+      print "**** $lineno - Unknown symbol '$symbol' in '$line'\n";
+      generate_16($ofh, $addr, $opcode, 0x00, $lineno, $line);
     }
-    generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   } else {
-    print "**** $lineno - Unknown symbol '$symbol' in '$line'\n";
-    generate_16($ofh, $addr, $opcode, 0x00, $lineno, $line);
+    my $symval = $symbols{$symbol};
+    if (defined $symval) {
+      my $opval = $symval;
+      if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])/) {
+        $opval = hex(lc($1));
+      } elsif ($symval =~ /%([01]{8})$/) {
+        $opval = unpack('C', pack("B8", $1));
+      }
+      generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+    } else {
+      print "**** $lineno - Unknown symbol '$symbol' in '$line'\n";
+      generate_16($ofh, $addr, $opcode, 0x00, $lineno, $line);
+    }
   }
 }
 
 sub handle_8_bit_symbol_add {
-  my ($ofh, $lineno, $addr, $opcode, $symbol, $val, $line) = @_;
+  my ($ofh, $lineno, $addr, $opcode, $prt, $symbol, $val, $line) = @_;
 
   my $symval = $symbols{$symbol};
   if (defined $symval) {
-    my $opval = sym_add($symval, $val);
+    my $rval = substr($val, 0, 2);
+    # $prt is for Immediate instructions to specify the 2nd byte.
+    if (defined $prt && $prt eq '>') {
+      $rval = substr($val, 2, 2);
+    }
+    my $opval = sym_add($symval, $rval);
     if ($opval > 255) {
       $opval -= 256;
     }
@@ -822,11 +850,16 @@ sub handle_8_bit_symbol_add {
 }
 
 sub handle_8_bit_symbol_sub {
-  my ($ofh, $lineno, $addr, $opcode, $symbol, $val, $line) = @_;
+  my ($ofh, $lineno, $addr, $opcode, $prt, $symbol, $val, $line) = @_;
 
   my $symval = $symbols{$symbol};
   if (defined $symval) {
-    my $opval = sym_sub($symval, $val);
+    my $rval = substr($val, 0, 2);
+    # $prt is for Immediate instructions to specify the 2nd byte.
+    if (defined $prt && $prt eq '>') {
+      $rval = substr($val, 2, 2);
+    }
+    my $opval = sym_sub($symval, $rval);
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
     if ($opval < 0) {
       $opval += 256;
@@ -905,33 +938,21 @@ sub handle_16_bit_symbol_sub {
 # SBC #Oper	E9
 sub is_Immediate {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^#\$[0-9a-fA-f][0-9a-fA-F]$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^#%([01]{8})$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^#(\d)+$/) {
     return 0 if ($1 > 255);
     return 2;
   # Handle symbols.
-  } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]*)$/) {
-    # Not Immediate if the symbol is not 8 bits.
-    my $symval = $symbols{$1};
-    if (defined $symval) {
-      if ($symval =~ /^\d+$/) {
-        return 0 if ($symval > 255);
-      } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
-      }
-    }
+  } elsif ($operand =~ /^#[>]*([A-Za-z\.\?][A-Za-z0-9_\.\?]*)$/) {
     return 2;
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*(\d+)$/) {
-    my $symval = $symbols{$1};
-    if (defined $symval) {
-      if ($symval =~ /^\d+$/) {
-        return 0 if ($symval > 255);
-      } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
-      }
-    }
+  } elsif ($operand =~ /^#[>]*([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\d+)$/) {
     return 2;
   }
 
@@ -944,19 +965,23 @@ sub generate_Immediate {
   if ($operand =~ /^#\$([0-9a-fA-F][0-9a-fA-F])$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^#%([01]{8})$/) {
+    my $opval = unpack('C', pack("B8", $1));
+    generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^#(\d+)$/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]*)/) {
+  } elsif ($operand =~ /^#[>]*([A-Za-z\.\?][A-Za-z0-9_\.\?]*)/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+)$/) {
+  } elsif ($operand =~ /^#([>]*)([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+)$/) {
     # Add
-    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^#([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+)$/) {
+    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $3, $line);
+  } elsif ($operand =~ /^#([>]*)([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+)$/) {
     # Subtract
-    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
+    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $3, $line);
   } else {
     print ">>>> $lineno - Immediate Bad Operand : '$operand'\n";
   }
@@ -990,13 +1015,18 @@ sub generate_Immediate {
 # TSB Zpg	04
 sub is_Zero_Page {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^#%([01]{8})$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^(\d+)$/) {
     return 0 if $1 > 255;
     return 2;
   # Handle symbols
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)$/) {
     # Not Zero Page if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1008,7 +1038,7 @@ sub is_Zero_Page {
     }
     return 2;
   # Allow symbol arithmetic
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*\d+$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*\d+$/) {
     # Not Zero Page if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1030,19 +1060,23 @@ sub generate_Zero_Page {
   if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{8})$/) {
+    my $opval = unpack('C', pack("B8", $1));
+    generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^(\d+)$/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+)$/) {
     # Add
-    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+)$/) {
+    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+)$/) {
     # Subtract
-    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
+    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
   } else {
     print ">>>> $lineno - Zero_Page Bad Operand : '$operand'\n";
   }
@@ -1068,13 +1102,18 @@ sub generate_Zero_Page {
 # STZ Zpg,X	74
 sub is_Zero_Page_X {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{8}),[Xx]$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^(\d+),[Xx]$/) {
     return 0 if $1 > 255;
     return 2;
   # Handle symbols
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Xx]$/) {
     # Not Zero Page,X if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1085,7 +1124,7 @@ sub is_Zero_Page_X {
       }
     }
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*\d+,[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*\d+,[Xx]$/) {
     # Not Zero Page,X if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1107,19 +1146,23 @@ sub generate_Zero_Page_X {
   if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F]),[Xx]$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{8}),[Xx]$/) {
+    my $opval = unpack('C', pack("B8", $1));
+    generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^(\d+),[Xx]$/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Xx]$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Handle symbol arithmetic
-  } elsif ($operand =~ /^([A-Za-z\.][0-9a-zA-Z_\.]*)\s*[+]\s*(\d+),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][0-9a-zA-Z_\.\?]*)\s*[+]\s*(\d+),[Xx]$/) {
     # Add
-    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^([A-Za-z\.][0-9a-zA-Z_\.]*)\s*[-]\s*(\d+),[Xx]$/) {
+    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
+  } elsif ($operand =~ /^([A-Za-z\.\?][0-9a-zA-Z_\.\?]*)\s*[-]\s*(\d+),[Xx]$/) {
     # Subtract
-    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
+    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
   } else {
     print ">>>> $lineno - Zero_Page_X Bad Operand : '$operand'\n";
   }
@@ -1130,13 +1173,18 @@ sub generate_Zero_Page_X {
 # STX Zpg,Y	96
 sub is_Zero_Page_Y {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F],[Yy]$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{8}),[Yy]$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^(\d+),[Yy]$/) {
     return 0 if $1 > 255;
     return 2;
   # Handle symbols
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*),[Yy]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Yy]$/) {
     # Not Zero Page,Y if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1147,7 +1195,7 @@ sub is_Zero_Page_Y {
       }
     }
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*\d+,[Yy]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*\d+,[Yy]$/) {
     # Not Zero Page,Y if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1169,19 +1217,23 @@ sub generate_Zero_Page_Y {
   if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F]),[Yy]$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{8}),[Yy]$/) {
+    my $opval = unpack('C', pack("B8", $1));
+    generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^(\d+),[Yy]$/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*),[Yy]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Yy]$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+),[Yy]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+),[Yy]$/) {
     # Add
-    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+),[Yy]$/) {
+    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+),[Yy]$/) {
     # Subtract
-    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
+    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
   } else {
     print ">>>> $lineno - Zero_Page_Y Bad Operand : '$operand'\n";
   }
@@ -1216,19 +1268,24 @@ sub generate_Zero_Page_Y {
 # TSB Abs	0C
 sub is_Absolute {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{16})$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^\d+$/) {
     return 2;
   # handle symbols
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)$/) {
     # Not Ansolute if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
     }
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*\d+$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*\d+$/) {
     # Not Ansolute if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1243,11 +1300,15 @@ sub is_Absolute {
 sub generate_Absolute {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]$)/) {
+  if ($operand =~ /^\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f])$/) {
     #my $opval1 = hex(lc(substr($1, 0, 2)));
     #my $opval2 = hex(lc(substr($1, 2, 2)));
     #generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
     generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{16})$/) {
+    my $opval = unpack('C', pack("B16", $1));
+    generate_24($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^(\d+)$/) {
     my $opval = sprintf("%04x", $1);
@@ -1255,13 +1316,13 @@ sub generate_Absolute {
     my $opval2 = hex(lc(substr($opval, 2, 2)));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)$/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $operand, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+)$/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+)$/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
   } else {
@@ -1276,14 +1337,17 @@ sub is_Indirect_Absolute {
   # Parse hex
   if ($operand =~ /^\(\$([0-9a-fA-F]+)\)$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{16})\)$/) {
+    return 2;
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\)$/) {
     return 2;
   # Handle symbol
-  } elsif ($operand =~ /^\([A-Za-z\.][A-Za-z0-9_\.]*\)$/) {
+  } elsif ($operand =~ /^\([A-Za-z\.\?][A-Za-z0-9_\.\?]*\)$/) {
     return 2;
   # Allow symbol arithmetic
-  } elsif ($operand =~ /^\([A-Za-z\.][A-Za-z0-9_\.]*\s*[+-]\s*\d+\)/) {
+  } elsif ($operand =~ /^\([A-Za-z\.\?][A-Za-z0-9_\.\?]*\s*[+-]\s*\d+\)/) {
     return 2;
   }
 
@@ -1297,6 +1361,10 @@ sub generate_Indirect_Absolute {
     #my $opval1 = hex(lc(substr($1, 0, 2)));
     #my $opval2 = hex(lc(substr($1, 2, 2)));
     generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{16})\)$/) {
+    my $opval = unpack('C', pack("B16", $1));
+    generate_24($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\)/) {
     my $opval = sprintf("%04x", $1);
@@ -1304,13 +1372,13 @@ sub generate_Indirect_Absolute {
     my $opval2 = hex(lc(substr($opval, 2, 2)));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\)/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+)\)/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+)\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+)\)/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
   } else {
@@ -1325,14 +1393,17 @@ sub is_Indirect_Absolute_X {
   # Parse hex
   if ($operand =~ /^\(\$([0-9a-fA-F]+),[Xx]\)$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{16}),[Xx]\)$/) {
+    return 2;
   # Parse decimal
   } elsif ($operand =~ /^\((\d+),[Xx]\)$/) {
     return 2;
   # Handle symbol
-  } elsif ($operand =~ /^\([A-Za-z\.][A-Za-z0-9_\.]*,[Xx]\)$/) {
+  } elsif ($operand =~ /^\([A-Za-z\.\?][A-Za-z0-9_\.\?]*,[Xx]\)$/) {
     return 2;
   # Allow symbol arithmetic
-  } elsif ($operand =~ /^\([A-Za-z\.][A-Za-z0-9_\.]*\s*[+-]\s*\d+,[Xx]\)/) {
+  } elsif ($operand =~ /^\([A-Za-z\.\?][A-Za-z0-9_\.\?]*\s*[+-]\s*\d+,[Xx]\)/) {
     return 2;
   }
 
@@ -1342,24 +1413,28 @@ sub is_Indirect_Absolute_X {
 sub generate_Indirect_Absolute_X {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f])\),[Xx]/) {
+  if ($operand =~ /^\(\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Xx]\)/) {
     #my $opval1 = hex(lc(substr($1, 0, 2)));
     #my $opval2 = hex(lc(substr($1, 2, 2)));
     generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{16}),[Xx]\)$/) {
+    my $opval = unpack('C', pack("B16", $1));
+    generate_24($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
-  } elsif ($operand =~ /^\((\d+)\),[Xx]/) {
+  } elsif ($operand =~ /^\((\d+),[Xx]\)/) {
     my $opval = sprintf("%04x", $1);
     my $opval1 = hex(lc(substr($opval, 0, 2)));
     my $opval2 = hex(lc(substr($opval, 2, 2)));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\),[Xx]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Xx]\)$/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+)\),[Xx]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+),[Xx]\)$/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+)\),[Xx]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+),[Xx]\)$/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
   } else {
@@ -1386,19 +1461,24 @@ sub generate_Indirect_Absolute_X {
 # STZ Abs,X	9E
 sub is_Absolute_X {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{16}),[Xx]$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^(\d{1,3}),[Xx]$/) {
     return 0 if $1 > 255;
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Xx]$/) {
     # Not Ansolute,X if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
     }
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*(\d+),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\d+),[Xx]$/) {
     # Not Ansolute,X if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1417,6 +1497,10 @@ sub generate_Absolute_X {
     #my $opval1 = hex(lc(substr($1, 0, 2)));
     #my $opval2 = hex(lc(substr($1, 2, 2)));
     generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{16}),[Xx]$/) {
+    my $opval = unpack('C', pack("B16", $1));
+    generate_24($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^(\d+),[Xx]/) {
     my $opval = sprintf("%04x", $1);
@@ -1424,13 +1508,13 @@ sub generate_Absolute_X {
     my $opval2 = hex(lc(substr($opval, 2, 2)));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Xx]$/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+),[Xx]$/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+),[Xx]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+),[Xx]$/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
   } else {
@@ -1451,18 +1535,23 @@ sub generate_Absolute_X {
 # STA Abs,Y	99
 sub is_Absolute_Y {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Yy]$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{16}),[Yy]$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^\d+,[Yy]$/) {
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*),[Yy]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Yy]$/) {
     # Not Ansolute,Y if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
     }
     return 2;
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*(\d+),[Yy]/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\d+),[Yy]/) {
     # Not Ansolute,Y if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1481,6 +1570,10 @@ sub generate_Absolute_Y {
     #my $opval1 = hex(lc(substr($1, 0, 2)));
     #my $opval2 = hex(lc(substr($1, 2, 2)));
     generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^%([01]{16}),[Yy]$/) {
+    my $opval = unpack('C', pack("B16", $1));
+    generate_24($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^(\d+),[Yy]/) {
     my $opval = sprintf("%04x", $1);
@@ -1488,13 +1581,13 @@ sub generate_Absolute_Y {
     my $opval2 = hex(lc(substr($opval, 2, 2)));
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*),[Yy]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Yy]$/) {
     handle_16_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+),[Yy]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+),[Yy]$/) {
     # Add
     handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+),[Yy]$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+),[Yy]$/) {
     # Subtract
     handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
   } else {
@@ -1513,12 +1606,17 @@ sub generate_Absolute_Y {
 # STA (Zpg,X)	81
 sub is_Indirect_Zero_Page_X {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\(\$[0-9a-fA-F][0-9a-fA-F],[Xx]\)$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{8}),[Xx]\)$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^\((\d+),[Xx]\)$/) {
     return 0 if $1 > 255;
     return 2;
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*),[Xx]\)$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Xx]\)$/) {
     # Not Indirect Zero Page,X if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1529,7 +1627,7 @@ sub is_Indirect_Zero_Page_X {
       }
     }
     return 2;
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*(\d+),[Xx]\)/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\d+),[Xx]\)/) {
     # Not Indirect Zero Page,X if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1551,19 +1649,23 @@ sub generate_Indirect_Zero_Page_X {
   if ($operand =~ /^\(\$([0-9a-fA-f][0-9a-fA-f]),[Xx]\)$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{8}),[Xx]\)$/) {
+    my $opval = unpack('C', pack("B8", $1));
+    generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\),[Xx]/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*),[Xx]\)$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*),[Xx]\)$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+),[Xx]\)$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+),[Xx]\)$/) {
     # Add
-    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+),[Xx]\)$/) {
+    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+),[Xx]\)$/) {
     # Subtract
-    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
+    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
   } else {
     print ">>>> $lineno - Indirect_Zero_Page_X Bad Operand : '$operand'\n";
   }
@@ -1580,12 +1682,17 @@ sub generate_Indirect_Zero_Page_X {
 # STA (Zpg),Y	91
 sub is_Indirect_Zero_Page_Y {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\),[Yy]$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{8})\),[Yy]$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^\((\d+)\),[Yy]/) {
     return 0 if $1 > 255;
     return 2;
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\),[Yy]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\),[Yy]$/) {
     # Not Indirect Zero Page,Y if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1596,7 +1703,7 @@ sub is_Indirect_Zero_Page_Y {
       }
     }
     return 2;
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*(\d+)\),[Yy]/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\d+)\),[Yy]/) {
     # Not Indirect Zero Page,Y if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1618,19 +1725,23 @@ sub generate_Indirect_Zero_Page_Y {
   if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\),[Yy]$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{8})\),[Yy]$/) {
+    my $opval = unpack('C', pack("B8", $1));
+    generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\),[Yy]$/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\),[Yy]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\),[Yy]$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+)\),[Yy]$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+)\),[Yy]$/) {
     # Add
-    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+)\),[Yy]$/) {
+    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+)\),[Yy]$/) {
     # Subtract
-    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
+    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
   } else {
     print ">>>> $lineno - Indirect_Zero_Page_Y Bad Operand : '$operand'\n";
   }
@@ -1647,12 +1758,17 @@ sub generate_Indirect_Zero_Page_Y {
 # STA (Zpg)	92
 sub is_Indirect_Zero_Page {
   my ($operand, $lineno) = @_;
+  # Parse hex
   if ($operand =~ /^\(\$[0-9a-fA-F][0-9a-fA-F]\)$/) {
     return 2;
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{8})\)$/) {
+    return 2;
+  # Parse decimal
   } elsif ($operand =~ /^\((\d+)\)$/) {
     return 0 if $1 > 255;
     return 2;
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\)$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\)$/) {
     # Not Indirect Zero Page if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1663,7 +1779,7 @@ sub is_Indirect_Zero_Page {
       }
     }
     return 2;
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+-]\s*(\d+)\)$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\d+)\)$/) {
     # Not Indirect Zero Page if the symbol is not 8 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
@@ -1685,19 +1801,23 @@ sub generate_Indirect_Zero_Page {
   if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\)$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
+  # Parse binary
+  } elsif ($operand =~ /^\(%([01]{8})\)$/) {
+    my $opval = unpack('C', pack("B8", $1));
+    generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse decimal
   } elsif ($operand =~ /^\((\d+)\)/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Return symbol value
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\)$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\)$/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[+]\s*(\d+)\)$/) {
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+]\s*(\d+)\)$/) {
     # Add
-    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-  } elsif ($operand =~ /^\(([A-Za-z\.][A-Za-z0-9_\.]*)\s*[-]\s*(\d+)\)$/) {
+    handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
+  } elsif ($operand =~ /^\(([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[-]\s*(\d+)\)$/) {
     # Subtract
-    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
+    handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, undef, $1, $2, $line);
   } else {
     print ">>>> $lineno - Indirect_Zero_Page Bad Operand '$operand'\n";
   }
@@ -1774,7 +1894,7 @@ sub generate_Relative {
       generate_16($ofh, $addr, $opcode, $rel, $lineno, $line);
     }
   # Handle symbols
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)$/) {
     my $symval = $symbols{$1};
     if (defined $symval) {
       my $opval = lc($symval);
@@ -1801,7 +1921,7 @@ sub generate_Relative {
       print "**** $lineno - Unknown symbol '$1' in '$line'\n";
     }
   # Handle symbol arithmetic
-  } elsif ($operand =~ /^([A-Za-z\.][A-Za-z0-9_\.]*)\s*([+-])\s*(\d+)$/) {
+  } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*([+-])\s*(\d+)$/) {
     my $symval = $symbols{$1};
     if (defined $symval) {
       my $opval = lc($symval);
@@ -2079,6 +2199,13 @@ if (open($ifh, "<$input_file")) {
       if ($operand =~ /([0-9a-fA-F]+)/) {
          $addr += (length($1) / 2);
       }
+    } elsif ($ucmnemonic =~ /DFB/i) {
+      if ($operand =~ /^%([01]{8})/) {
+        $addr++;
+      } elsif ($operand =~ /[0-9a-fA-F][0-9a-fA-F],*/) {
+        my @bytes = split(',', $operand);
+        $addr += scalar(@bytes);
+      }
     } elsif ($ucmnemonic =~ /ASC/i) {
       if ($label ne '') {
         my $symbol = $label;
@@ -2195,6 +2322,22 @@ if (open($ifh, "<$input_file")) {
         generate_8($ofh, $addr, ord($byte) + 128, $lineno, $tmpline);
         $tmpline = '';
         $addr++;
+      }
+    } elsif ($ucmnemonic =~ /DFB/i) {
+      if ($operand =~ /^%([01]{8})/) {
+        my $byte = unpack('C', pack("B8", $1));
+        generate_8($ofh, $addr, $byte, $lineno, $line);
+        $addr++;
+      } elsif ($operand =~ /[0-9a-fA-F][0-9a-fA-F],*/) {
+        my @bytes = split(',', $operand);
+        my $tmpline = $line;
+        foreach my $byte (@bytes) {
+          generate_8($ofh, $addr, hex(lc($byte)), $lineno, $tmpline);
+          $tmpline = '';
+          $addr++;
+        }
+      } else {
+        print "$line - Bad byte definition '$operand'\n";
       }
     } elsif ($ucmnemonic eq 'CHK') {
       generate_8($ofh, $addr, $checksum, $lineno, $line);
