@@ -771,6 +771,16 @@ sub generate_24 {
   calc_checksum($opval2);
 }
 
+sub generate_bytes {
+  my ($ofh, $addr, $bytes, $lineno, $line) = @_;
+  my $tmpline = $line;
+  foreach my $byte (@{$bytes}) {
+    next unless $byte =~ /^[0-9a-fA-F]+/;
+    generate_8($ofh, $addr, hex(lc($byte)), $lineno, $tmpline);
+    $tmpline = '';
+  }
+}
+
 sub sym_add {
   my ($symval, $offset) = @_;
 
@@ -2307,22 +2317,14 @@ if (open($ifh, "<$input_file")) {
     } elsif ($ucmnemonic eq 'HEX') {
       # Unpack hex data.
       my @bytes  = map { pack('C', hex($_)) } ($operand =~ /(..)/g);
-      my $tmpline = $line;
-      foreach my $byte (@bytes) {
-        generate_8($ofh, $addr, ord($byte), $lineno, $tmpline);
-        $tmpline = '';
-        $addr++;
-      }
+      generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
+      $addr += scalar(@bytes);
     } elsif ($ucmnemonic eq 'ASC') {
       # Unpack string dats.
       my ($str) = $operand =~ /^\"(.+)\"$/;
       my @bytes  = map { pack('C', ord($_)) } ($str =~ /(.)/g);
-      my $tmpline = $line;
-      foreach my $byte (@bytes) {
-        generate_8($ofh, $addr, ord($byte) + 128, $lineno, $tmpline);
-        $tmpline = '';
-        $addr++;
-      }
+      generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
+      $addr += scalar(@bytes);
     } elsif ($ucmnemonic =~ /DFB/i) {
       if ($operand =~ /^%([01]{8})/) {
         my $byte = unpack('C', pack("B8", $1));
@@ -2330,12 +2332,8 @@ if (open($ifh, "<$input_file")) {
         $addr++;
       } elsif ($operand =~ /[0-9a-fA-F][0-9a-fA-F],*/) {
         my @bytes = split(',', $operand);
-        my $tmpline = $line;
-        foreach my $byte (@bytes) {
-          generate_8($ofh, $addr, hex(lc($byte)), $lineno, $tmpline);
-          $tmpline = '';
-          $addr++;
-        }
+        generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
+        $addr += scalar(@bytes);
       } else {
         print "$line - Bad byte definition '$operand'\n";
       }
