@@ -781,28 +781,34 @@ sub generate_bytes {
   }
 }
 
+sub get_symval {
+  my ($sym) = @_;
+
+  return $symbols{$sym};
+}
+
+sub parse_symval {
+  my ($symval) = @_;
+
+  if ($symval =~ /\$([0-9a-fA-F]+)/) {
+    return hex(lc($1));
+  } elsif ($symval =~ /%([01]{8})/) {
+    my $byte = unpack('C', pack("B8", $1));
+    return $byte;
+  }
+  return $symval;
+}
+
 sub sym_add {
   my ($symval, $offset) = @_;
 
-  if ($symval =~ /\$([0-9a-fA-F]+)/) {
-    return hex(lc($1)) + $offset;
-  } elsif ($symval =~ /%([01]{8})/) {
-    my $byte = unpack('C', pack("B8", $1));
-    return $byte + $offset;
-  }
-  return $symval + $offset;
+  return parse_symval($symval) + $offset;
 }
 
 sub sym_sub {
   my ($symval, $offset) = @_;
 
-  if ($symval =~ /\$([0-9a-fA-F]+)/) {
-    return hex(lc($1)) - $offset;
-  } elsif ($symval =~ /%([01]{8})/) {
-    my $byte = unpack('C', pack("B8", $1));
-    return $byte - $offset;
-  }
-  return $symval - $offset;
+  return parse_symval($symval) - $offset;
 }
 
 sub handle_8_bit_symbol {
@@ -1043,7 +1049,7 @@ sub is_Zero_Page {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1055,7 +1061,7 @@ sub is_Zero_Page {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1130,7 +1136,7 @@ sub is_Zero_Page_X {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]|^%[01]{8}$$/;
       }
     }
     return 2;
@@ -1141,7 +1147,7 @@ sub is_Zero_Page_X {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]|^%[01]{8}$$/;
       }
     }
     return 2;
@@ -1201,7 +1207,7 @@ sub is_Zero_Page_Y {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1212,7 +1218,7 @@ sub is_Zero_Page_Y {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1292,14 +1298,14 @@ sub is_Absolute {
     # Not Ansolute if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
-      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
     return 2;
   } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*\d+$/) {
     # Not Ansolute if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
-      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
     return 2;
   }
@@ -1485,14 +1491,14 @@ sub is_Absolute_X {
     # Not Ansolute,X if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
-      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
     return 2;
   } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\d+),[Xx]$/) {
     # Not Ansolute,X if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
-      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
     return 2;
   }
@@ -1558,14 +1564,14 @@ sub is_Absolute_Y {
     # Not Ansolute,Y if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
-      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
     return 2;
   } elsif ($operand =~ /^([A-Za-z\.\?][A-Za-z0-9_\.\?]*)\s*[+-]\s*(\d+),[Yy]/) {
     # Not Ansolute,Y if the symbol is not 16 bits.
     my $symval = $symbols{$1};
     if (defined $symval) {
-      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+      return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
     return 2;
   }
@@ -1633,7 +1639,7 @@ sub is_Indirect_Zero_Page_X {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1644,7 +1650,7 @@ sub is_Indirect_Zero_Page_X {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1709,7 +1715,7 @@ sub is_Indirect_Zero_Page_Y {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1720,7 +1726,7 @@ sub is_Indirect_Zero_Page_Y {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1785,7 +1791,7 @@ sub is_Indirect_Zero_Page {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -1796,7 +1802,7 @@ sub is_Indirect_Zero_Page {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     }
     return 2;
@@ -2212,8 +2218,17 @@ if (open($ifh, "<$input_file")) {
     } elsif ($ucmnemonic =~ /DFB/i) {
       if ($operand =~ /^%([01]{8})/) {
         $addr++;
-      } elsif ($operand =~ /[0-9a-fA-F][0-9a-fA-F],*/) {
-        my @bytes = split(',', $operand);
+      } else {
+        my @symbols = split(',', $operand);
+        my @bytes;
+        foreach my $sym (@symbols) {
+          my $symval = get_symval($sym);
+          if (defined $symval) {
+            push @bytes, sprintf("%02x", parse_symval($symval));
+          } else {
+            print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
+          }
+        }
         $addr += scalar(@bytes);
       }
     } elsif ($ucmnemonic =~ /ASC/i) {
@@ -2331,7 +2346,17 @@ if (open($ifh, "<$input_file")) {
         generate_8($ofh, $addr, $byte, $lineno, $line);
         $addr++;
       } elsif ($operand =~ /[0-9a-fA-F][0-9a-fA-F],*/) {
-        my @bytes = split(',', $operand);
+        #my @bytes = split(',', $operand);
+        my @symbols = split(',', $operand);
+        my @bytes;
+        foreach my $sym (@symbols) {
+          my $symval = get_symval($sym);
+          if (defined $symval) {
+            push @bytes, sprintf("%02x", parse_symval($symval));
+          } else {
+            print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
+          }
+        }
         generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
         $addr += scalar(@bytes);
       } else {
