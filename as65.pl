@@ -897,6 +897,7 @@ sub handle_16_bit_symbol {
       $opval1 = hex(lc($1));
       $opval2 = hex(lc($2));
     } else {
+      $symval =~ s/^\$//;
       my $opval = sprintf("%04x", $symval);
       $opval1 = hex(substr($opval, 0, 2));
       $opval2 = hex(substr($opval, 2, 2));
@@ -2218,6 +2219,8 @@ if (open($ifh, "<$input_file")) {
     } elsif ($ucmnemonic =~ /DFB/i) {
       if ($operand =~ /^%([01]{8})/) {
         $addr++;
+      } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
+        $addr++;
       } else {
         my @symbols = split(',', $operand);
         my @bytes;
@@ -2344,6 +2347,9 @@ if (open($ifh, "<$input_file")) {
       if ($operand =~ /^%([01]{8})/) {
         my $byte = unpack('C', pack("B8", $1));
         generate_8($ofh, $addr, $byte, $lineno, $line);
+        $addr++;
+      } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
+        generate_8($ofh, $addr, $1, $lineno, $line);
         $addr++;
       } elsif ($operand =~ /[0-9a-fA-F][0-9a-fA-F],*/) {
         #my @bytes = split(',', $operand);
