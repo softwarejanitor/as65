@@ -773,11 +773,19 @@ sub generate_24 {
 
 sub generate_bytes {
   my ($ofh, $addr, $bytes, $lineno, $line) = @_;
-  my $tmpline = $line;
+  my $firstflag = 1;
   foreach my $byte (@{$bytes}) {
-    next unless $byte =~ /^[0-9a-fA-F]+/;
-    generate_8($ofh, $addr, hex(lc($byte)), $lineno, $tmpline);
-    $tmpline = '';
+    if ($firstflag) {
+      print sprintf("%04x:  %02x        %-4d  %s\n", $addr, ord($byte), $lineno, $line) if $code_listing;
+      $firstflag = 0;
+    } else {
+      print sprintf("%04x:  %02x\n", $addr, ord($byte)) if $code_listing;
+    }
+    print $ofh pack("C", ord($byte));
+
+    calc_checksum(ord($byte));
+
+    $addr++;
   }
 }
 
@@ -2380,15 +2388,16 @@ if (open($ifh, "<$input_file")) {
       }
     } elsif ($ucmnemonic eq 'HEX') {
       # Unpack hex data.
+      #my @bytes  = map { pack('C', hex($_)) } ($operand =~ /(..)/g);
       my @bytes  = map { pack('C', hex($_)) } ($operand =~ /(..)/g);
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
-      $addr += scalar(@bytes);
+      #$addr += scalar(@bytes);
     } elsif ($ucmnemonic eq 'ASC') {
       # Unpack string dats.
       my ($str) = $operand =~ /^\"(.+)\"$/;
-      my @bytes  = map { pack('C', ord($_)) } ($str =~ /(.)/g);
+      my @bytes  = map { pack('C', ord($_) | 0x80) } ($str =~ /(.)/g);
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
-      $addr += scalar(@bytes);
+      #$addr += scalar(@bytes);
     } elsif ($ucmnemonic =~ /DFB/i) {
       if ($operand =~ /^%([01]{8})/) {
         my $byte = unpack('C', pack("B8", $1));
@@ -2404,13 +2413,13 @@ if (open($ifh, "<$input_file")) {
         foreach my $sym (@symbols) {
           my $symval = get_symval($sym);
           if (defined $symval) {
-            push @bytes, sprintf("%02x", parse_symval($symval));
+            push @bytes, pack('C', hex(sprintf("%02x", parse_symval($symval))));
           } else {
             print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
           }
         }
         generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
-        $addr += scalar(@bytes);
+        #$addr += scalar(@bytes);
       } else {
         print "$line - Bad byte definition '$operand'\n";
       }
