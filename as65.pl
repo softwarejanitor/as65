@@ -2174,6 +2174,10 @@ sub parse_line {
     $mnemonic = $1;
     $operand = $2;
     $comment = '';
+    if ($operand =~ /^;/) {
+      $comment = $operand;
+      $operand = '';
+    }
   } elsif ($line =~ /^\s+(\S+)\s+(;.*)$/) {
     $label = '';
     $mnemonic = $1;
