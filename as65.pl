@@ -295,7 +295,7 @@ my %mnemonics = (
     # BCC	Relative	BCC Oper	90	2	2
     'Relative' => 0x90,
   },
-  'BLT' => {  # Pseudo-op sam as BCC
+  'BLT' => {  # Pseudo-op same as BCC
     # BLT	Relative	BLT Oper	90	2	2
     'Relative' => 0x90,
   },
@@ -303,12 +303,16 @@ my %mnemonics = (
     # BCS	Relative	BCS Oper	B0	2	2
     'Relative' => 0xb0,
   },
-  'BGE' => {  # Pseudo-op sam as BCS
+  'BGE' => {  # Pseudo-op same as BCS
     # BGE	Relative	BGE Oper	B0	2	2
     'Relative' => 0xb0,
   },
   'BEQ' => {
     # BEQ	Relative	BEQ Oper	F0	2	2
+    'Relative' => 0xf0,
+  },
+  'BFL' => {  # Pseudo-op same as BEQ
+    # BFL	Relative	BFL Oper	F0	2	2
     'Relative' => 0xf0,
   },
   'BIT' => {
@@ -329,6 +333,10 @@ my %mnemonics = (
   },
   'BNE' => {
     # BNE	Relative	BNE Oper	D0	2	2
+    'Relative' => 0xd0,
+  },
+  'BTR' => {  # Pseudo-op same as BNE
+    # BTR	Relative	BTR Oper	D0	2	2
     'Relative' => 0xd0,
   },
   'BPL' => {
@@ -443,6 +451,26 @@ my %mnemonics = (
     # 		(Zero Page),Y	EOR (Zpg),Y	51	2	5
     'Indirect_Zero_Page_Y' => 0x51,
     # 		(Zero Page)	EOR (Zpg)	52	2	5
+    'Indirect_Zero_Page' => 0x52,
+  },
+  'XOR' => {  # Pseudo-op same as EOR
+    # XOR	Immediate	XOR #Oper	49	2	2
+    'Immediate' => 0x49,
+    # 		Zero Page	XOR Zpg		45	2	3
+    'Zero_Page' => 0x45,
+    # 		Zero Page,X	XOR Zpg,X	55	2	4
+    'Zero_Page_X' => 0x55,
+    # 		Absolute	XOR Abs		4D	3	4
+    'Absolute' => 0x4d,
+    # 		Absolute,X	XOR Abs,X	5D	3	4
+    'Absolute_X' => 0x5d,
+    # 		Absolute,Y	XOR Abs,Y	59	3	4
+    'Absolute_Y' => 0x59,
+    # 		(Zero Page,X)	XOR (Zpg,X)	41	2	6
+    'Indirect_Zero_Page_X' => 0x41,
+    # 		(Zero Page),Y	XOR (Zpg),Y	51	2	5
+    'Indirect_Zero_Page_Y' => 0x51,
+    # 		(Zero Page)	XOR (Zpg)	52	2	5
     'Indirect_Zero_Page' => 0x52,
   },
   'INA' => {
@@ -2084,6 +2112,8 @@ sub is_Implied {
   # No operand on implied instructions
   if ($operand eq '') {
     return 1;
+  } elsif ($operand =~ /^\s*;/) {
+    return 1;
   }
 
   return 0;
@@ -2174,6 +2204,11 @@ sub parse_line {
     $mnemonic = $2;
     $operand = '';
     $comment = $3;
+  } elsif ($line =~ /^(\S+)\s+(;.*)$/) {
+    $label = $1;
+    $mnemonic = '';
+    $operand = '';
+    $comment = $2;
   } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ddl[Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
@@ -2290,7 +2325,7 @@ if (open($ifh, "<$input_file")) {
       if ($operand =~ /([0-9a-fA-F]+)/) {
          $addr += (length($1) / 2);
       }
-    } elsif ($ucmnemonic =~ /DS/i) {
+    } elsif ($ucmnemonic =~ /^DS$/i) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
@@ -2300,6 +2335,11 @@ if (open($ifh, "<$input_file")) {
       } elsif ($operand =~ /(\d+)/) {
          $addr += $1;
       }
+    } elsif ($ucmnemonic =~ /^DB$/i) {
+#print "GOT HERE 1\n";
+      $addr++;
+    } elsif ($ucmnemonic =~ /^DA$/i) {
+      $addr += 2;
     } elsif ($ucmnemonic =~ /DFB/) {
       if ($operand =~ /^%([01]{8})/) {
         $addr++;
@@ -2322,7 +2362,7 @@ if (open($ifh, "<$input_file")) {
         }
         $addr += scalar(@bytes);
       }
-    } elsif ($ucmnemonic =~ /ASC|DCI|INV|FLS|REV|STR/) {
+    } elsif ($ucmnemonic =~ /ASC|DCI|INV|FLS|BLK|REV|STR/) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
@@ -2330,6 +2370,12 @@ if (open($ifh, "<$input_file")) {
       my ($str) = $operand =~ /^\"(.+)\"([0-9a-fA-F]*)$/;
       $addr += length($str);
       $addr++ if defined $2;
+    } elsif ($ucmnemonic =~ /HBY/) {
+      ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /BYT/) {
+      ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /DFS/) {
+      ##FIXME -- implement this
     } elsif ($ucmnemonic =~ /OBJ|CHK|LST/) {
       # Just ignore this
     } elsif ($ucmnemonic =~ /MAC/) {
@@ -2427,7 +2473,7 @@ if (open($ifh, "<$input_file")) {
       #my @bytes  = map { pack('C', hex(lc($_))) } ($operand =~ /(..)/g);
       my @bytes  = map { pack('C', hex(lc($_))) } ($operand =~ /(..)/g);
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
-    } elsif ($ucmnemonic =~ /ASC|DCI|INV|FLS|REV|STR/) {
+    } elsif ($ucmnemonic =~ /ASC|DCI|INV|FLS|BLK|REV|STR/) {
 #print "operand=$operand\n";
       # Unpack string dats.
       my ($str, $trl) = $operand =~ /^\"(.+)\"([0-9a-fA-F]*)$/;
@@ -2442,6 +2488,7 @@ if (open($ifh, "<$input_file")) {
         generate_8($ofh, $addr, scalar(@bytes), $lineno, $line);
         $addr++;
       }
+##FIXME -- need to implement bit setting for INV, FLS, etc.
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
       if (defined $trl && $trl ne '') {
         my @trlbytes  = map { pack('C', hex(lc($_))) } ($trl =~ /(..)/g);
@@ -2505,7 +2552,7 @@ if (open($ifh, "<$input_file")) {
       } else {
         print "$line - Bad byte definition '$operand'\n";
       }
-    } elsif ($ucmnemonic eq 'DS') {
+    } elsif ($ucmnemonic =~ /^DS$/) {
       # Decimal
       my $strlen = 0;
       if ($operand =~ /^(\d+)/) {
@@ -2519,6 +2566,39 @@ if (open($ifh, "<$input_file")) {
         push @bytes, pack('C', 0x00);
       }
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
+    } elsif ($ucmnemonic =~ /^DB$/) {
+      if ($operand =~ /^%([01]{8})/) {
+        my $opval = unpack('C', pack("B8", $1));
+        generate_8($ofh, $addr, $opval, $lineno, $line);
+        $addr++;
+      } elsif ($operand =~ /^(\d+)/) {
+        generate_8($ofh, $addr, $1, $lineno, $line);
+        $addr++;
+      } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
+#print "GOT HERE 2\n";
+        my $opval = hex(lc($1));
+        generate_8($ofh, $addr, $opval, $lineno, $line);
+        $addr++;
+      }
+    } elsif ($ucmnemonic =~ /^DA$/) {
+      if ($operand =~ /^%([01]{16})/) {
+        my $opval1 = unpack('C', pack("B8", substr($1, 0, 8)));
+        my $opval2 = unpack('C', pack("B8", substr($1, 8, 8)));
+        generate_16($ofh, $addr, $opval1, $opval2, $lineno, $line);
+        $addr++;
+##FIXME -- handle decimal
+      } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])/) {
+        my $opval1 = hex(lc($1));
+        my $opval2 = hex(lc($2));
+        generate_16($ofh, $addr, $opval1, $opval2, $lineno, $line);
+        $addr++;
+      }
+    } elsif ($ucmnemonic =~ /HBY/) {
+      ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /BYT/) {
+      ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /DFS/) {
+      ##FIXME -- implement this
     } elsif ($ucmnemonic =~ /MAC/i) {
       print "**** Unsupported **** '$line'\n";
     } elsif ($ucmnemonic eq 'CHK') {
