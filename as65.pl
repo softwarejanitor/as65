@@ -1037,8 +1037,11 @@ sub is_Immediate {
   } elsif ($operand =~ /^#[<>]*([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
     return 2;
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^#[<>]*([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-]\s*(\$[0-9a-fA-F]+)$/) {
+  } elsif ($operand =~ /^#[<>]*([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-]\s*(\$*[0-9a-fA-F]+)$/) {
+#print "GOT HERE IMMEDIATE '$1' '$2'\n";
     return 2;
+  #} else {
+    #print "NOT IMMEDIATE! '$operand'\n";
   }
 
   return 0;
@@ -1062,12 +1065,12 @@ sub generate_Immediate {
   } elsif ($operand =~ /^#([<>]*[A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
   # Allow arithmetic on symbol
-  } elsif ($operand =~ /^#([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$[0-9a-fA-F]+)$/) {
-print "foo $1 $2 $3\n";
+  } elsif ($operand =~ /^#([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$*[0-9a-fA-F]+)$/) {
+#print "foo $1 $2 $3\n";
     # Add
     handle_8_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $3, $line);
-  } elsif ($operand =~ /^#([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[-]\s*(\$[0-9a-fA-F]+)$/) {
-print "foo $1 $2 $3\n";
+  } elsif ($operand =~ /^#([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[-]\s*(\$*[0-9a-fA-F]+)$/) {
+#print "foo $1 $2 $3\n";
     # Subtract
     handle_8_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $3, $line);
   } else {
@@ -1804,31 +1807,33 @@ sub is_Indirect_Zero_Page_Y {
     return 2;
   } elsif ($operand =~ /^\(([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\),[Yy]$/) {
     # Not Indirect Zero Page,Y if the symbol is not 8 bits.
-    my $symval = $symbols{$1};
-    if (defined $symval) {
-      if ($symval =~ /^\d+$/) {
-        return 0 if ($symval > 255);
-      } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
-      }
-    } else {
-      # Assume that forward declared symbols are addresses.
-      return 0;
-    }
+##FIXME -- FNORD
+    #my $symval = $symbols{$1};
+    #if (defined $symval) {
+    #  if ($symval =~ /^\d+$/) {
+    #    return 0 if ($symval > 255);
+    #  } else {
+    #    return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
+    #  }
+    #} else {
+    #  # Assume that forward declared symbols are addresses.
+    #  return 0;
+    #}
     return 2;
   } elsif ($operand =~ /^\(([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-]\s*(\$*[0-9a-fA-F]+)\),[Yy]/) {
     # Not Indirect Zero Page,Y if the symbol is not 8 bits.
-    my $symval = $symbols{$1};
-    if (defined $symval) {
-      if ($symval =~ /^\d+$/) {
-        return 0 if ($symval > 255);
-      } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
-      }
-    } else {
-      # Assume that forward declared symbols are addresses.
-      return 0;
-    }
+##FIXME -- FNORD
+    #my $symval = $symbols{$1};
+    #if (defined $symval) {
+    #  if ($symval =~ /^\d+$/) {
+    #    return 0 if ($symval > 255);
+    #  } else {
+    #    return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
+    #  }
+    #} else {
+    #  # Assume that forward declared symbols are addresses.
+    #  return 0;
+    #}
     return 2;
   }
 
@@ -2320,7 +2325,43 @@ if (open($ifh, "<$input_file")) {
       # define constant
       my $symbol = $label;
       print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
-      $symbols{$symbol} = $operand;
+      if ($operand =~ /\$([0-9a-fA-F]+)/) {
+        $symbols{$symbol} = $operand;
+      # 8 bit binary
+      } elsif ($operand =~ /^%([01]{8})$/) {
+        $symbols{$symbol} = '$' . sprintf("%02x", pack("B8", $1));
+      # 16 bit binary
+      } elsif ($operand =~ /^%([01]{8})([01]{8})$/) {
+        $symbols{$symbol} = '$' . sprintf("%02x", pack("B8", $1)) . sprintf("%02x", pack("B8", $2));
+      # Handle symbol
+      } elsif ($operand =~ /^([<>]*[A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)/) {
+        $symbols{$symbol} = $symbols{$operand};
+      # Allow arithmetic on symbol
+      } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$[0-9a-fA-F]+)$/) {
+        # Add
+        my $opval = $1;
+        my $opval2 = $2;
+        my $opv2 = $opval2;
+        # Hex
+        if ($opval2 =~ /^\$([0-9a-fA-F]+)/) {
+        ##FIXME -- need to handle binary, etc
+          $opv2 = hex(lc($1));
+        }
+        $symbols{$symbol} = $symbols{$opval} + $opv2;
+      } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$[0-9a-fA-F]+)$/) {
+        # Subtract
+        my $opval = $1;
+        my $opval2 = $2;
+        my $opv2 = $opval2;
+        # Hex
+        if ($opval2 =~ /^\$([0-9a-fA-F]+)/) {
+        ##FIXME -- need to handle binary, etc
+          $opv2 = hex(lc($1));
+        }
+        $symbols{$symbol} = $symbols{$opval} - $opv2;
+      } else {
+        $symbols{$symbol} = $operand;
+      }
     } elsif ($ucmnemonic =~ /HEX/i) {
       if ($label ne '') {
         my $symbol = $label;
@@ -2340,11 +2381,23 @@ if (open($ifh, "<$input_file")) {
          $addr += $1;
       }
     } elsif ($ucmnemonic =~ /^DB$/i) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
 #print "GOT HERE 1\n";
       $addr++;
     } elsif ($ucmnemonic =~ /^DA$/i) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
       $addr += 2;
     } elsif ($ucmnemonic =~ /DFB/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
       if ($operand =~ /^%([01]{8})/) {
         $addr++;
       } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
@@ -2354,6 +2407,7 @@ if (open($ifh, "<$input_file")) {
       } elsif ($operand =~ /^#>(.+)/) {
         $addr++;
       } else {
+##FIXME -- allow symbol arithmatic here
         my @symbols = split(',', $operand);
         my @bytes;
         foreach my $sym (@symbols) {
@@ -2375,12 +2429,24 @@ if (open($ifh, "<$input_file")) {
       $addr += length($str);
       $addr++ if defined $2;
     } elsif ($ucmnemonic =~ /HBY/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
       ##FIXME -- implement this
     } elsif ($ucmnemonic =~ /BYT/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
       ##FIXME -- implement this
     } elsif ($ucmnemonic =~ /DFS/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
       ##FIXME -- implement this
-    } elsif ($ucmnemonic =~ /OBJ|CHK|LST/) {
+    } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END/) {
       # Just ignore this
     } elsif ($ucmnemonic =~ /MAC/) {
       print "**** Unsupported **** '$line'\n";
@@ -2453,7 +2519,7 @@ if (open($ifh, "<$input_file")) {
     my $ucmnemonic = uc($mnemonic);
 
     # Skip ORG, EQU and OBJ on pass 2.
-    if ($ucmnemonic =~ /ORG|EQU|\.EQ|OBJ|LST|^=$/) {
+    if ($ucmnemonic =~ /ORG|EQU|\.EQ|OBJ|LST|^=$|END/) {
       print sprintf("                 %-4d  %s\n", $lineno, $line) if $code_listing;
       next;
     }
@@ -2504,7 +2570,7 @@ if (open($ifh, "<$input_file")) {
         generate_8($ofh, $addr, $byte, $lineno, $line);
         $addr++;
       } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
-        generate_8($ofh, $addr, $1, $lineno, $line);
+        generate_8($ofh, $addr, hex(lc($1)), $lineno, $line);
         $addr++;
       } elsif ($operand =~ /^#<(.+)/) {
 #print "symbol=$1'\n";
