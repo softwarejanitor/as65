@@ -1031,7 +1031,10 @@ sub is_Immediate {
     return 2;
   # Parse decimal
   } elsif ($operand =~ /^#(\d)+$/) {
-    return 0 if ($1 > 255);
+    #return 0 if ($1 > 255);
+    return 2;
+  # Parse ASCII
+  } elsif ($operand =~ /^#"(.)$/) {
     return 2;
   # Handle symbols.
   } elsif ($operand =~ /^#[<>]*([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
@@ -1061,6 +1064,9 @@ sub generate_Immediate {
   # Parse decimal
   } elsif ($operand =~ /^#(\d+)$/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
+  # Parse ASCII
+  } elsif ($operand =~ /^#"(.)$/) {
+    generate_16($ofh, $addr, $opcode, ord($1), $lineno, $line);
   # Handle symbol
   } elsif ($operand =~ /^#([<>]*[A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)/) {
     handle_8_bit_symbol($ofh, $lineno, $addr, $opcode, $1, $line);
