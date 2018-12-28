@@ -2309,10 +2309,10 @@ if (open($ifh, "<$input_file")) {
         $symbols{$symbol} = lc($operand);
       # 8 bit binary
       } elsif ($operand =~ /^%([01]{8})$/) {
-        $symbols{$symbol} = '$' . sprintf("%02x", pack("B8", $1));
+        $symbols{$symbol} = '$' . sprintf("%02x", unpack('C', pack("B8", $1)));
       # 16 bit binary
       } elsif ($operand =~ /^%([01]{8})([01]{8})$/) {
-        $symbols{$symbol} = '$' . sprintf("%02x", pack("B8", $1)) . sprintf("%02x", pack("B8", $2));
+        $symbols{$symbol} = '$' . sprintf("%02x", unpack('C', pack("B8", $1))) . sprintf("%02x", unpack('C', pack("B8", $2)));
       # Handle symbol
       } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
       ##FIXME -- need to handle < and > here
