@@ -17,6 +17,9 @@ my $code_listing = 1;  # Generated code listing.
 my $symbol_table = 1;  # Output symbol table.
 
 my %symbols = ();  # Hash of symbol table values.
+my %macros = ();  # Hash of macros.
+
+my $in_macro = 0;
 
 my $base = 0x800;  # Default base address.  Overide with -a (decimal) or -x (hex) from command line or .org or ORG directives in code.
 
@@ -544,8 +547,8 @@ my %mnemonics = (
     'Immediate' => 0xa0,
     # 		Zero Page	LDY Zpg		A4	2	3
     'Zero_Page' => 0xa4,
-    # 		Zero Page,Y	LDY Zpg,X	B4	2	4
-    'Zero_Page_Y' => 0xb4,
+    # 		Zero Page,X	LDY Zpg,X	B4	2	4
+    'Zero_Page_X' => 0xb4,
     # 		Absolute	LDY Abs		AC	3	4
     'Absolute' => 0xac,
     # 		Absolute,Y	LDY Abs,X	BC	3	4
@@ -1026,7 +1029,7 @@ sub handle_16_bit_symbol_sub {
 sub is_Immediate {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^#\$[0-9a-fA-f][0-9a-fA-F]$/) {
+  if ($operand =~ /^#\$[0-9a-fA-f]{0,1}[0-9a-fA-F]$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^#%([01]{8})$/) {
@@ -1036,7 +1039,7 @@ sub is_Immediate {
     #return 0 if ($1 > 255);
     return 2;
   # Parse ASCII
-  } elsif ($operand =~ /^#"(.)$/) {
+  } elsif ($operand =~ /^#"(.)["]*$/) {
     return 2;
   # Handle symbols.
   } elsif ($operand =~ /^#[<>]*([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
@@ -1054,7 +1057,7 @@ sub is_Immediate {
 sub generate_Immediate {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^#\$([0-9a-fA-F][0-9a-fA-F])$/) {
+  if ($operand =~ /^#\$([0-9a-fA-F]{0,1}[0-9a-fA-F])$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse binary
@@ -1065,7 +1068,7 @@ sub generate_Immediate {
   } elsif ($operand =~ /^#(\d+)$/) {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Parse ASCII
-  } elsif ($operand =~ /^#"(.)$/) {
+  } elsif ($operand =~ /^#"(.)["]*$/) {
     generate_16($ofh, $addr, $opcode, ord($1), $lineno, $line);
   # Handle symbol
   } elsif ($operand =~ /^#([<>]*[A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)/) {
@@ -1111,7 +1114,7 @@ sub generate_Immediate {
 sub is_Zero_Page {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F]$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^#%([01]{8})$/) {
@@ -1158,7 +1161,7 @@ sub is_Zero_Page {
 sub generate_Zero_Page {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
+  if ($operand =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse binary
@@ -1204,7 +1207,7 @@ sub generate_Zero_Page {
 sub is_Zero_Page_X {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F],[Xx]$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^%([01]{8}),[Xx]$/) {
@@ -1221,7 +1224,7 @@ sub is_Zero_Page_X {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]|^%[01]{8}$$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     } else {
       # Assume that forward declared symbols are addresses.
@@ -1235,7 +1238,7 @@ sub is_Zero_Page_X {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
       } else {
-        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]|^%[01]{8}$$/;
+        return 0 unless $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
       }
     } else {
       # Assume that forward declared symbols are addresses.
@@ -1250,7 +1253,7 @@ sub is_Zero_Page_X {
 sub generate_Zero_Page_X {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F]),[Xx]$/) {
+  if ($operand =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F]),[Xx]$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse binary
@@ -1281,7 +1284,7 @@ sub generate_Zero_Page_X {
 sub is_Zero_Page_Y {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$[0-9a-fA-F][0-9a-fA-F],[Yy]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F],[Yy]$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^%([01]{8}),[Yy]$/) {
@@ -1327,7 +1330,7 @@ sub is_Zero_Page_Y {
 sub generate_Zero_Page_Y {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F]),[Yy]$/) {
+  if ($operand =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F]),[Yy]$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse binary
@@ -1382,7 +1385,7 @@ sub generate_Zero_Page_Y {
 sub is_Absolute {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^%([01]{16})$/) {
@@ -1413,8 +1416,10 @@ sub is_Absolute {
 sub generate_Absolute {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f])$/) {
-    generate_24($ofh, $addr, $opcode, hex(lc($2)), hex(lc($1)), $lineno, $line);
+  if ($operand =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f])$/) {
+    my $opval1 = hex(lc($1));
+    my $opval2 = hex(lc($2));
+    generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Parse binary
   } elsif ($operand =~ /^%([01]{16})$/) {
     my $opval1 = unpack('C', pack("B8", substr($1, 0, 8)));
@@ -1468,10 +1473,10 @@ sub is_Indirect_Absolute {
 sub generate_Indirect_Absolute {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f])\)/) {
-    #my $opval1 = hex(lc(substr($1, 0, 2)));
-    #my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  if ($operand =~ /^\(\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f])\)/) {
+    my $opval1 = hex(lc($1));
+    my $opval2 = hex(lc($2));
+    generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Parse binary
   } elsif ($operand =~ /^\(%([01]{16})\)$/) {
     my $opval = unpack('C', pack("B16", $1));
@@ -1524,10 +1529,10 @@ sub is_Indirect_Absolute_X {
 sub generate_Indirect_Absolute_X {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Xx]\)/) {
-    #my $opval1 = hex(lc(substr($1, 0, 2)));
-    #my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  if ($operand =~ /^\(\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Xx]\)/) {
+    my $opval1 = hex(lc($1));
+    my $opval2 = hex(lc($2));
+    generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Parse binary
   } elsif ($operand =~ /^\(%([01]{16}),[Xx]\)$/) {
     my $opval = unpack('C', pack("B16", $1));
@@ -1573,7 +1578,7 @@ sub generate_Indirect_Absolute_X {
 sub is_Absolute_X {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^%([01]{16}),[Xx]$/) {
@@ -1604,10 +1609,10 @@ sub is_Absolute_X {
 sub generate_Absolute_X {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Xx]/) {
-    #my $opval1 = hex(lc(substr($1, 0, 2)));
-    #my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  if ($operand =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Xx]/) {
+    my $opval1 = hex(lc($1));
+    my $opval2 = hex(lc($2));
+    generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Parse binary
   } elsif ($operand =~ /^%([01]{16}),[Xx]$/) {
     my $opval = unpack('C', pack("B16", $1));
@@ -1647,7 +1652,7 @@ sub generate_Absolute_X {
 sub is_Absolute_Y {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\$[0-9a-fA-F]*[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Yy]$/) {
+  if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Yy]$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^%([01]{16}),[Yy]$/) {
@@ -1677,10 +1682,10 @@ sub is_Absolute_Y {
 sub generate_Absolute_Y {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\$([0-9a-fA-F]*[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Yy]/) {
-    #my $opval1 = hex(lc(substr($1, 0, 2)));
-    #my $opval2 = hex(lc(substr($1, 2, 2)));
-    generate_24($ofh, $addr, $opcode, $2, $1, $lineno, $line);
+  if ($operand =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9A-Fa-f][0-9A-Fa-f]),[Yy]/) {
+    my $opval1 = hex(lc($1));
+    my $opval2 = hex(lc($2));
+    generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   # Parse binary
   } elsif ($operand =~ /^%([01]{16}),[Yy]$/) {
     my $opval = unpack('C', pack("B16", $1));
@@ -1718,7 +1723,7 @@ sub generate_Absolute_Y {
 sub is_Indirect_Zero_Page_X {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$[0-9a-fA-F][0-9a-fA-F],[Xx]\)$/) {
+  if ($operand =~ /^\(\$[0-9a-fA-F]{0,1}[0-9a-fA-F],[Xx]\)$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^\(%([01]{8}),[Xx]\)$/) {
@@ -1763,7 +1768,7 @@ sub is_Indirect_Zero_Page_X {
 sub generate_Indirect_Zero_Page_X {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-f][0-9a-fA-f]),[Xx]\)$/) {
+  if ($operand =~ /^\(\$([0-9a-fA-f]{0,1}[0-9a-fA-f]),[Xx]\)$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse binary
@@ -1800,7 +1805,7 @@ sub generate_Indirect_Zero_Page_X {
 sub is_Indirect_Zero_Page_Y {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\),[Yy]$/) {
+  if ($operand =~ /^\(\$([0-9a-fA-F]{0,1}[0-9a-fA-F])\),[Yy]$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^\(%([01]{8})\),[Yy]$/) {
@@ -1823,7 +1828,7 @@ sub is_Indirect_Zero_Page_Y {
 sub generate_Indirect_Zero_Page_Y {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\),[Yy]$/) {
+  if ($operand =~ /^\(\$([0-9a-fA-F]{0,1}[0-9a-fA-F])\),[Yy]$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse binary
@@ -1860,7 +1865,7 @@ sub generate_Indirect_Zero_Page_Y {
 sub is_Indirect_Zero_Page {
   my ($operand, $lineno) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$[0-9a-fA-F][0-9a-fA-F]\)$/) {
+  if ($operand =~ /^\(\$[0-9a-fA-F]{0,1}[0-9a-fA-F]\)$/) {
     return 2;
   # Parse binary
   } elsif ($operand =~ /^\(%([01]{8})\)$/) {
@@ -1905,7 +1910,7 @@ sub is_Indirect_Zero_Page {
 sub generate_Indirect_Zero_Page {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
   # Parse hex
-  if ($operand =~ /^\(\$([0-9a-fA-F][0-9a-fA-F])\)$/) {
+  if ($operand =~ /^\(\$([0-9a-fA-F]{0,1}[0-9a-fA-F])\)$/) {
     my $opval = hex(lc($1));
     generate_16($ofh, $addr, $opcode, $opval, $lineno, $line);
   # Parse binary
@@ -1970,7 +1975,7 @@ sub generate_Relative {
   my ($addr, $operand, $opcode, $ofh, $lineno, $line) = @_;
 
   # Decode hex
-  if ($operand =~ /^\$([0-9a-fA-F]{1,4}$)/) {
+  if ($operand =~ /^\$([0-9a-fA-F]+$)/) {
     my $opval = hex(lc($1));
     my $rel = (0 - ($addr - $opval)) + 254;
     if ($rel < 0) {
@@ -2002,10 +2007,11 @@ sub generate_Relative {
     }
   # Handle symbols
   } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
-    my $symval = $symbols{$1};
+    my $symbol = $1;
+    my $symval = $symbols{$symbol};
     if (defined $symval) {
       my $opval = lc($symval);
-      if ($symval =~ /^\$([0-9a-fA-F]{1,4})/) {
+      if ($symval =~ /^\$([0-9a-fA-F]+)$/) {
         $opval = hex(lc($1));
       } else {
         $opval = $symval;
@@ -2032,7 +2038,7 @@ sub generate_Relative {
     my $symval = $symbols{$1};
     if (defined $symval) {
       my $opval = lc($symval);
-      if ($symval =~ /^\$([0-9a-fA-F]{1,4})/) {
+      if ($symval =~ /^\$([0-9a-fA-F]+)$/) {
         $opval = hex(lc($1));
       } else {
         $opval = $symval;
@@ -2218,6 +2224,48 @@ sub parse_line {
     $mnemonic = $1;
     $operand = $2;
     $comment = '';
+  # Next 4 for things like LDA #" "
+  } elsif ($line =~ /^\s+(\S+)\s+(#\".\")\s+(;.*)$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = $3;
+  } elsif ($line =~ /^\s+(\S+)\s+(#\".\")\s*$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = '';
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(#\".\")\s+(;.*)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $3;
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(#\".\")\s*$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = '';
+  # Next 4 for things like DS 255," "
+  } elsif ($line =~ /^\s+([Dd][Ss])\s+(\d+,\".\")\s+(;.*)$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = $3;
+  } elsif ($line =~ /^\s+([Dd][Ss])\s+(\d+,\".\")\s*$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = '';
+  } elsif ($line =~ /^(\S+)\s+([Dd][Ss])\s+(\d+,\".\")\s+(;.*)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $3;
+  } elsif ($line =~ /^(\S+)\s+([Dd][Ss])\s+(\d+,\".\")\s*$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = '';
   } else {
     print sprintf("SYNTAX ERROR!    %-4d  %s\n", $lineno, $line);
   }
@@ -2226,6 +2274,8 @@ sub parse_line {
   $comment = '' unless defined $comment;
   $mnemonic = '' unless defined $mnemonic;
   $operand = '' unless defined $operand;
+
+  print "label=$label mnemonic=$mnemonic operand=$operand comment=$comment\n" if $debug;
 
   return ($label, $mnemonic, $operand, $comment);
 }
@@ -2389,9 +2439,17 @@ if (open($ifh, "<$input_file")) {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
-      my ($str) = $operand =~ /^\"(.+)\"([0-9a-fA-F]*)$/;
+      my $str = '';
+      my $trl;
+      if ($operand =~ /^\"(.+)\"([0-9a-fA-F]*)$/) {
+        $str = $1;
+        $trl = $2;
+      } elsif ($operand =~ /^'(.+)'([0-9a-fA-F]*)$/) {
+        $str = $1;
+        $trl = $2;
+      }
       $addr += length($str);
-      $addr++ if defined $2;
+      $addr++ if defined $trl;
     } elsif ($ucmnemonic =~ /HBY/) {
       if ($label ne '') {
         my $symbol = $label;
@@ -2410,10 +2468,15 @@ if (open($ifh, "<$input_file")) {
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       ##FIXME -- implement this
-    } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END/) {
+    } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END|SAV/) {
       # Just ignore this
     } elsif ($ucmnemonic =~ /MAC/) {
-      print "**** Unsupported **** '$line'\n";
+      print "**** MACRO START **** '$line'\n";
+      $macros{$label} = '';
+      $in_macro = 1;
+    } elsif ($ucmnemonic =~ /\<\<\</) {
+      print "**** MACRO END **** '$line'\n";
+      $in_macro = 0;
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
@@ -2428,6 +2491,8 @@ if (open($ifh, "<$input_file")) {
       if (! $foundit) {
         print "!!!! $lineno - Unrecognized addressing mode '$line'!\n";
       }
+    } elsif (defined $macros{$ucmnemonic}) {
+      print "#### MACRO $ucmnemonic ####\n";
     } else {
       print "$lineno - Unknown mnemonic '$mnemonic' in '$line'\n";
     }
@@ -2483,7 +2548,7 @@ if (open($ifh, "<$input_file")) {
     my $ucmnemonic = uc($mnemonic);
 
     # Skip ORG, EQU and OBJ on pass 2.
-    if ($ucmnemonic =~ /ORG|EQU|\.EQ|OBJ|LST|^=$|END/) {
+    if ($ucmnemonic =~ /ORG|EQU|\.EQ|OBJ|LST|^=$|END|SAV/) {
       print sprintf("                 %-4d  %s\n", $lineno, $line) if $code_listing;
       next;
     }
@@ -2509,7 +2574,14 @@ if (open($ifh, "<$input_file")) {
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
     } elsif ($ucmnemonic =~ /ASC|DCI|INV|FLS|BLK|REV|STR/) {
       # Unpack string dats.
-      my ($str, $trl) = $operand =~ /^\"(.+)\"([0-9a-fA-F]*)$/;
+      my ($str, $trl);
+      if ($operand =~ /^\"(.+)\"([0-9a-fA-F]*)$/) {
+        $str = $1;
+        $trl = $2;
+      } elsif ($operand =~ /^'(.+)'([0-9a-fA-F]*)$/) {
+        $str = $1;
+        $trl = $2;
+      }
       my @bytes  = map { pack('C', ord($_) | 0x80) } ($str =~ /(.)/g);
       if ($ucmnemonic eq 'REV') {
         @bytes = reverse @bytes;
@@ -2578,15 +2650,19 @@ if (open($ifh, "<$input_file")) {
     } elsif ($ucmnemonic =~ /^DS$/) {
       # Decimal
       my $strlen = 0;
+      my $val = 0x00;
       if ($operand =~ /^(\d+)/) {
         $strlen = $1;
+      } elsif ($operand =~ /^(\d+),"(.)["]*/) {
+        $val = ord($1);
       # Hex
       } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
         $strlen = hex(lc($1));
+##FIXME -- probably need to add ," " support here.
       }
       my @bytes;
       for (my $loopc = 0; $loopc < $strlen; $loopc++) {
-        push @bytes, pack('C', 0x00);
+        push @bytes, pack('C', $val);
       }
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
     } elsif ($ucmnemonic =~ /^DB$/) {
@@ -2621,10 +2697,18 @@ if (open($ifh, "<$input_file")) {
       ##FIXME -- implement this
     } elsif ($ucmnemonic =~ /DFS/) {
       ##FIXME -- implement this
-    } elsif ($ucmnemonic =~ /MAC/i) {
-      print "**** Unsupported **** '$line'\n";
+    } elsif ($ucmnemonic =~ /MAC/) {
+      #print "**** Unsupported **** '$line'\n";
+      ## Ignore
+    } elsif ($ucmnemonic =~ /\<\<\</) {
+      #print "**** Unsupported **** '$line'\n";
+      ## Ignore
     } elsif ($ucmnemonic eq 'CHK') {
       generate_8($ofh, $addr, $checksum, $lineno, $line);
+    } elsif (defined $macros{$ucmnemonic}) {
+      print "#### MACRO $ucmnemonic ####\n";
+      print sprintf("                 %-4d  %s\n", $lineno, $line) if $code_listing;
+      print "**** Not yet implemented ****\n";
     } else {
       print "$lineno - Unknown mnemonic '$mnemonic' in '$line'\n";
     }
