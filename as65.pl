@@ -2511,7 +2511,7 @@ if (open($ifh, "<$input_file")) {
       } else {
         $symbols{$symbol} = $operand;
       }
-    } elsif ($ucmnemonic =~ /HEX/i) {
+    } elsif ($ucmnemonic =~ /HEX/) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
@@ -2529,13 +2529,13 @@ if (open($ifh, "<$input_file")) {
       } elsif ($operand =~ /^(\d+)/) {
          $addr += $1;
       }
-    } elsif ($ucmnemonic =~ /^DB$/i) {
+    } elsif ($ucmnemonic =~ /^DB$/) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       $addr++;
-    } elsif ($ucmnemonic =~ /^DA$/i) {
+    } elsif ($ucmnemonic =~ /^DA$/) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
@@ -2821,8 +2821,9 @@ if (open($ifh, "<$input_file")) {
         $val = hex(lc($2));
       # Hex
       } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
-        $strlen = hex(lc($1));
-        ##FIXME -- probably need to add ," " support here.
+        $strlen = 1;
+        $val = hex(lc($1));
+        ##FIXME -- probably need to add ," " support here, etc.
       }
       my @bytes;
       for (my $loopc = 0; $loopc < $strlen; $loopc++) {
@@ -2843,17 +2844,46 @@ if (open($ifh, "<$input_file")) {
         $addr++;
       }
     } elsif ($ucmnemonic =~ /^DA$/) {
+      # Handle binary.
       if ($operand =~ /^%([01]{16})/) {
         my $opval1 = unpack('C', pack("B8", substr($1, 0, 8)));
         my $opval2 = unpack('C', pack("B8", substr($1, 8, 8)));
-        generate_16($ofh, $addr, $opval1, $opval2, $lineno, $line);
-        $addr++;
-      ##FIXME -- need to handle decimal here
-      } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])/) {
-        my $opval1 = hex(lc($1));
+        generate_16($ofh, $addr, $opval2, $opval1, $lineno, $line);
+        $addr += 2;
+      # Handle decimal.
+      } elsif ($operand =~ /^(\d+)$/) {
+        my $opval = sprintf("%04x", $1);
+        my $opval1 = hex(lc(substr($opval, 0, 2)));
+        my $opval2 = hex(lc(substr($opval, 2, 2)));
+        generate_16($ofh, $addr, $opval2, $opval1, $lineno, $line);
+        $addr += 2;
+      # Handle address arithmatic.
+      } elsif ($operand =~ /^\$([0-9a-fA-F]+)\s*([+-])\s*(\$*.+)$/) {
+        my $opval = hex(lc($1));
+        my $op = $2;
+        my $val = $3;
+        if ($val =~ /^\$([0-9a-fA-F]+)/) {
+          $val = hex(lc($1));
+        }
+        if ($op eq '+') {
+          $opval += $val;
+        } elsif ($op eq '-') {
+          $opval -= $val;
+        }
+        my $opv = sprintf("%04x", $opval);
+        my $opval1 = hex(lc(substr($opv, 0, 2)));
+        my $opval2 = hex(lc(substr($opv, 2, 2)));
+        generate_16($ofh, $addr, $opval2, $opval1, $lineno, $line);
+        $addr += 2;
+      # Handle hex.
+      } elsif ($operand =~ /^\$([0-9a-fA-F]{0-2})([0-9a-fA-F][0-9a-fA-F])$/) {
+        my $opval1 = 0x00;
+        if (defined $1 && $1 ne '') {
+          $opval1 = hex(lc($1));
+        }
         my $opval2 = hex(lc($2));
-        generate_16($ofh, $addr, $opval1, $opval2, $lineno, $line);
-        $addr++;
+        generate_16($ofh, $addr, $opval2, $opval1, $lineno, $line);
+        $addr += 2;
       }
     } elsif ($ucmnemonic =~ /HBY/) {
       ##FIXME -- implement this
