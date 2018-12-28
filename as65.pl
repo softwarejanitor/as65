@@ -2800,7 +2800,7 @@ if (open($ifh, "<$input_file")) {
       # Hex
       } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
         $strlen = hex(lc($1));
-##FIXME -- probably need to add ," " support here.
+        ##FIXME -- probably need to add ," " support here.
       }
       my @bytes;
       for (my $loopc = 0; $loopc < $strlen; $loopc++) {
@@ -2850,7 +2850,6 @@ if (open($ifh, "<$input_file")) {
     } elsif (defined $macros{$ucmnemonic}) {
       #print "#### MACRO $ucmnemonic ####\n" if $debug;
       print sprintf("                 %-4d  %s\n", $lineno, $line) if $code_listing;
-#print "operand=$operand\n";
 
       my $opval1 = '';
       my $opval2 = '';
@@ -2870,9 +2869,7 @@ if (open($ifh, "<$input_file")) {
         $opval2 = hex(lc(substr($opval, 2, 2)));
       # Return symbol value
       } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
-#print "symbol=$1\n";
         my $symval = $symbols{$1};
-#print "symval='$symval'\n";
         if ($symval =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
           $opval1 = hex(lc($1));
           $opval2 = hex(lc($2));
@@ -2881,7 +2878,6 @@ if (open($ifh, "<$input_file")) {
           $opval2 = 0x00;
         } else {
           $symval =~ s/^\$//;
-#print "symval='$symval'\n";
           my $opval = sprintf("%04x", $symval);
           $opval1 = hex(lc(substr($opval, 0, 2)));
           $opval2 = hex(lc(substr($opval, 2, 2)));
@@ -2890,9 +2886,7 @@ if (open($ifh, "<$input_file")) {
       } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$*[0-9a-fA-F]+)$/) {
         # Add
         #handle_16_bit_symbol_add($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-#print "symbol=$1 add=$2\n";
         my $symval = $symbols{$1};
-#print "symval='$symval'\n";
         if ($symval =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
           $opval1 = hex(lc($1));
           $opval2 = hex(lc($2));
@@ -2901,18 +2895,15 @@ if (open($ifh, "<$input_file")) {
           $opval2 = 0x00;
         } else {
           $symval =~ s/^\$//;
-#print "symval='$symval'\n";
           my $opval = sprintf("%04x", $symval);
           $opval1 = hex(lc(substr($opval, 0, 2)));
           $opval2 = hex(lc(substr($opval, 2, 2)));
         }
-##FIXME -- need to do add here
+        ##FIXME -- need to do add here
       } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[-]\s*(\$*[0-9a-fA-F]+)$/) {
         # Subtract
         #handle_16_bit_symbol_sub($ofh, $lineno, $addr, $opcode, $1, $2, $line);
-#print "symbol=$1 sub=$2\n";
         my $symval = $symbols{$1};
-#print "symval='$symval'\n";
         if ($symval =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
           $opval1 = hex(lc($1));
           $opval2 = hex(lc($2));
@@ -2921,12 +2912,11 @@ if (open($ifh, "<$input_file")) {
           $opval2 = 0x00;
         } else {
           $symval =~ s/^\$//;
-#print "symval='$symval'\n";
           my $opval = sprintf("%04x", $symval);
           $opval1 = hex(lc(substr($opval, 0, 2)));
           $opval2 = hex(lc(substr($opval, 2, 2)));
         }
-##FIXME -- need to do sub here
+        ##FIXME -- need to do sub here
       #} else {
       #  print ">>>> $lineno - Macro Bad Operand '$operand' in '$line'\n";
       }
