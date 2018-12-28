@@ -2484,8 +2484,23 @@ if (open($ifh, "<$input_file")) {
         $symbols{$symbol} = '$' . sprintf("%02x", unpack('C', pack("B8", $1))) . sprintf("%02x", unpack('C', pack("B8", $2)));
       # Handle symbol
       } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
-      ##FIXME -- need to handle < and > here
-        $symbols{$symbol} = $symbols{$2};
+        my $symval = $symbols{$2};
+        if (defined $symval) {
+          # Handle < and >.
+          if (defined $1 && $1 eq '<') {
+            if ($symval =~ /\$([0-9a-fA-F]{1,2})/) {
+              $symbols{$symbol} = $1;
+            }
+          } elsif (defined $1 && $1 eq '>') {
+            if ($symval =~ /\$[0-9a-fA-F]*([0-9a-fA-F]{1,2})/) {
+              $symbols{$symbol} = $1;
+            }
+          } else {
+            $symbols{$symbol} = $symval;
+          }
+        } else {
+          print "**** $lineno - Unknown symbol '$2' in '$line'\n";
+        }
       # Allow arithmetic on symbol
       } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$*[0-9a-fA-F]+)$/) {
         # Add
@@ -2504,14 +2519,14 @@ if (open($ifh, "<$input_file")) {
       if ($operand =~ /([0-9a-fA-F]+)/) {
          $addr += (length($1) / 2);
       }
-    } elsif ($ucmnemonic =~ /^DS$/i) {
+    } elsif ($ucmnemonic =~ /^DS$/) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       if ($operand =~ /\$([0-9a-fA-F]+)/) {
          $addr += hex(lc($1));
-      } elsif ($operand =~ /(\d+)/) {
+      } elsif ($operand =~ /^(\d+)/) {
          $addr += $1;
       }
     } elsif ($ucmnemonic =~ /^DB$/i) {
@@ -2793,10 +2808,17 @@ if (open($ifh, "<$input_file")) {
       # Decimal
       my $strlen = 0;
       my $val = 0x00;
-      if ($operand =~ /^(\d+)/) {
+      if ($operand =~ /^(\d+)$/) {
         $strlen = $1;
       } elsif ($operand =~ /^(\d+),"(.)["]*/) {
-        $val = ord($1);
+        $strlen = $1;
+        $val = ord($2);
+      } elsif ($operand =~ /^(\d+),'(.)[']*/) {
+        $strlen = $1;
+        $val = ord($2);
+      } elsif ($operand =~ /^(\d+),\$([0-9a-fA-F][0-9a-fA-F])/) {
+        $strlen = $1;
+        $val = hex(lc($2));
       # Hex
       } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
         $strlen = hex(lc($1));
