@@ -2326,22 +2326,22 @@ sub parse_line {
     $mnemonic = '';
     $operand = '';
     $comment = $2;
-  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ddl[Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*(;.*)$/) {
+  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+"[,]*[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ddl[Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = $3;
     $comment = $4;
-  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*(;.*)$/) {
+  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+"[,]*[0-9a-fA-F]*)\s+(;.*)$|^\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = $2;
     $comment = $3;
-  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*$/) {
+  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+"[,]*[0-9a-fA-F]*)\s*$|^(\S+)\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = $3;
     $comment = '';
-  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*$/) {
+  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+"[,]*[0-9a-fA-F]*)\s*$|^\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*$/) {
     $label = '';
     $mnemonic = $1;
     $operand = $2;
@@ -3106,7 +3106,13 @@ if (open($ifh, "<$input_file")) {
       } elsif ($operand =~ /^'(.+)'([0-9a-fA-F]*)$/) {
         $str = $1;
         $trl = $2;
+      } elsif ($operand =~ /^\"(.+)\",([0-9a-fA-F]*)$/) {
+        $str = $1;
+        $trl = $2;
+      } else {
+        print ">>>> $lineno - Macro Bad Operand '$operand' in '$line'\n";
       }
+      $str = '' unless defined $str;
       my @bytes  = map { pack('C', ord($_) | 0x80) } ($str =~ /(.)/g);
       if ($ucmnemonic eq 'REV') {
         @bytes = reverse @bytes;
