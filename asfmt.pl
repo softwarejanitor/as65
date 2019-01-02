@@ -10,6 +10,8 @@
 
 use strict;
 
+my $debug = 0;
+
 sub usage {
   print "Usage:\n";
   print "$0 [-h] <input_file>\n";
@@ -35,7 +37,7 @@ sub parse_line {
   my ($line, $lineno) = @_;
 
   my ($label, $mnemonic, $operand, $comment) = ('', '', '', '');
-  if ($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s+(;.*)$/) {
+  if ($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s*(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = $3;
@@ -45,7 +47,7 @@ sub parse_line {
     $mnemonic = $2;
     $operand = $3;
     $comment = '';
-  } elsif ($line =~ /^\s+(\S+)\s+(\S+)\s+(;.*)$/) {
+  } elsif ($line =~ /^\s+(\S+)\s+(\S+)\s*(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = $2;
@@ -55,7 +57,11 @@ sub parse_line {
     $mnemonic = $1;
     $operand = $2;
     $comment = '';
-  } elsif ($line =~ /^\s+(\S+)\s+(;.*)$/) {
+    if ($operand =~ /^;/) {
+      $comment = $operand;
+      $operand = '';
+    }
+  } elsif ($line =~ /^\s+(\S+)\s*(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = '';
@@ -75,44 +81,104 @@ sub parse_line {
     $mnemonic = $2;
     $operand = '';
     $comment = '';
-  } elsif ($line =~ /^\s+(\S+)\s+(;.*)$/) {
+  } elsif ($line =~ /^\s+(\S+)\s*(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = '';
     $comment = $2;
-  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(;.*)$/) {
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s*(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = '';
     $comment = $3;
-  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+")\s+(;.*)$/) {
+  } elsif ($line =~ /^(\S+)\s*(;.*)$/) {
+    $label = $1;
+    $mnemonic = '';
+    $operand = '';
+    $comment = $2;
+  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ddl[Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^(\S+)\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = $3;
     $comment = $4;
-  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+")\s+(;.*)$/) {
+  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s+(;.*)$|^\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*(;.*)$/) {
     $label = '';
     $mnemonic = $1;
     $operand = $2;
     $comment = $3;
-  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+")\s*$/) {
+  } elsif ($line =~ /^(\S+)\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^(\S+)\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*$/) {
     $label = $1;
     $mnemonic = $2;
     $operand = $3;
     $comment = '';
-  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+")\s*$/) {
+  } elsif ($line =~ /^\s+([Aa][Ss][Cc])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Dd][Cc][Ii])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ii][Nn][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ff][Ll][Ss])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Rr][Ee][Vv])\s+(".+"[0-9a-fA-F]*)\s*$|^\s+([Ss][Tt][Rr])\s+(".+"[0-9a-fA-F]*)\s*$/) {
     $label = '';
     $mnemonic = $1;
     $operand = $2;
     $comment = '';
+  # Next 4 for things like LDA #" "
+  } elsif ($line =~ /^\s+(\S+)\s+(#\".\")\s*(;.*)$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = $3;
+  } elsif ($line =~ /^\s+(\S+)\s+(#\".\")\s*$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = '';
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(#\".\")\s*(;.*)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $3;
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(#\".\")\s*$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = '';
+  # Next 4 for things like DS 255," "
+  } elsif ($line =~ /^\s+([Dd][Ss])\s+(\d+,\".\")\s*(;.*)$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = $3;
+  } elsif ($line =~ /^\s+([Dd][Ss])\s+(\d+,\".\")\s*$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = '';
+  } elsif ($line =~ /^(\S+)\s+([Dd][Ss])\s+(\d+,\".\")\s*(;.*)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $3;
+  } elsif ($line =~ /^(\S+)\s+([Dd][Ss])\s+(\d+,\".\")\s*$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = '';
+  # Handle comments w/o ; -- S-C assembler
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s+(.+)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $4;
+  } elsif ($line =~ /^\s+(\S+)\s+(\S+)\s+(.+)$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = $3;
   } else {
-    print "SYNTAX ERROR!  $lineno : $line\n";
+    print sprintf("SYNTAX ERROR!    %-4d  %s\n", $lineno, $line);
   }
 
   $label = '' unless defined $label;
   $comment = '' unless defined $comment;
   $mnemonic = '' unless defined $mnemonic;
   $operand = '' unless defined $operand;
+
+  print "label=$label mnemonic=$mnemonic operand=$operand comment=$comment\n" if $debug;
 
   return ($label, $mnemonic, $operand, $comment);
 }
@@ -128,7 +194,7 @@ if (open($ifh, "<$input_file")) {
 
     $lineno++;
 
-    if ($line =~ /^\s*\*|^\s*;/) {
+    if ($line =~ /^\s*\*|^\s*;/ || $line eq '') {
       print "$line\n";
       next;
     }
@@ -136,7 +202,7 @@ if (open($ifh, "<$input_file")) {
     # Parse input lines.
     my ($label, $mnemonic, $operand, $comment) = parse_line($line, $lineno);
 
-    print sprintf("%-8s %-4s %-12s %s\n", $label, $mnemonic, $operand, $comment);
+    print sprintf("%-12s %-4s %-12s %s\n", $label, $mnemonic, $operand, $comment);
   }
 
   close $ifh;

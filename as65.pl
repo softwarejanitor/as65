@@ -2378,6 +2378,17 @@ sub parse_line {
     $mnemonic = $2;
     $operand = $3;
     $comment = '';
+  # Handle comments w/o ; -- S-C assembler
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s+(.+)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $4;
+  } elsif ($line =~ /^\s+(\S+)\s+(\S+)\s+(.+)$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = $3;
   } else {
     print sprintf("SYNTAX ERROR!    %-4d  %s\n", $lineno, $line);
   }
@@ -2464,7 +2475,7 @@ if (open($ifh, "<$input_file")) {
     }
 
     # We only need to look for ORG and EQU on pass 1.
-    if ($ucmnemonic eq 'ORG') {
+    if ($ucmnemonic =~ /ORG|\.OR/) {
       # Set base
       $operand =~ s/^\$//;
       $base = hex(lc($operand));
@@ -2535,7 +2546,7 @@ if (open($ifh, "<$input_file")) {
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       $addr++;
-    } elsif ($ucmnemonic =~ /^DA$/) {
+    } elsif ($ucmnemonic =~ /^DA$|^\.DA$/) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
@@ -2554,16 +2565,39 @@ if (open($ifh, "<$input_file")) {
         $addr++;
       } elsif ($operand =~ /^#>(.+)/) {
         $addr++;
+      # Allow symbol arithmatic.
+      } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*([+-])\s*(\$*[0-9a-fA-F]+)$/) {
+        my $symval = $symbols{$1};
+        if (defined $symval) {
+          if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
+            $addr++;
+          } elsif ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
+            $addr += 2;
+          }
+        #} else {
+        #  print "**** $lineno - Unknown symbol '$1' in '$line'\n";
+        }
+      # Allow symbols.
+      } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*$/) {
+        my $symval = $symbols{$1};
+        if (defined $symval) {
+          if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
+            $addr++;
+          } elsif ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
+            $addr += 2;
+          }
+        #} else {
+        #  print "**** $lineno - Unknown symbol '$1' in '$line'\n";
+        }
       } else {
-      ##FIXME -- allow symbol arithmatic here
         my @symbols = split(',', $operand);
         my @bytes;
         foreach my $sym (@symbols) {
           my $symval = get_symval($sym);
           if (defined $symval) {
             push @bytes, sprintf("%02x", parse_symval($symval));
-          } else {
-            print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
+          #} else {
+          #  print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
           }
         }
         $addr += scalar(@bytes);
@@ -2602,7 +2636,7 @@ if (open($ifh, "<$input_file")) {
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       ##FIXME -- implement this
-    } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END|SAV/) {
+    } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END|SAV|\.TF/) {
       # Just ignore this
     } elsif ($ucmnemonic =~ /MAC/) {
       print "**** MACRO START **** '$line'\n" if $debug;
@@ -2613,6 +2647,310 @@ if (open($ifh, "<$input_file")) {
       print "**** MACRO END **** '$line'\n" if $debug;
       $in_macro = 0;
       $cur_macro = '';
+    # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
+    } elsif (defined $mnemonics{$ucmnemonic}) {
+      my $foundit = 0;
+      foreach my $opmode (keys $mnemonics{$ucmnemonic}) {
+        my $checkfunc = $modefuncs{$opmode}{'check'};
+        if ($checkfunc->($operand, $lineno)) {
+          $addr += $modefuncs{$opmode}{'size'};
+          $foundit = 1;
+          last;
+        }
+      }
+      if (! $foundit) {
+        print "!!!! $lineno - Unrecognized addressing mode '$line'!\n";
+      }
+    } elsif (defined $macros{$ucmnemonic}) {
+      print "#### MACRO $ucmnemonic ####\n" if $debug;
+
+      # Add length for the macro.
+      my $maclnno = 0;
+      foreach my $macln (@{$macros{$ucmnemonic}}) {
+        $maclnno++;
+        my ($maclabel, $macmnemonic, $macoperand, $maccomment) = parse_line($macln, $maclnno);
+        my $ucmacmnemonic = uc($macmnemonic);
+
+        my $foundit = 0;
+        foreach my $opmode (keys $mnemonics{$ucmacmnemonic}) {
+          my $checkfunc = $modefuncs{$opmode}{'check'};
+          if ($checkfunc->($macoperand, $maclnno)) {
+            $addr += $modefuncs{$opmode}{'size'};
+            $foundit = 1;
+            last;
+          }
+        }
+        if (! $foundit) {
+          print "!!!! $maclnno - Unrecognized addressing mode in macro '$macln'!\n";
+        }
+      }
+    } else {
+      print "$lineno - Unknown mnemonic '$mnemonic' in '$line'\n";
+    }
+  }
+
+  print "**** Starting 1st pass again ****\n" if $verbose;
+
+  print "\n" if $verbose;
+
+  # Rewind to the beginning of the input file.
+  seek($ifh, 0, 0);
+
+  $addr = $base;
+  $lineno = 0;
+  $checksum = 0;
+
+  # Pass 1.5, build symbol table.
+  while (my $line = readline $ifh) {
+    chomp $line;
+
+    $lineno++;
+
+    #print sprintf("%04x:  %-4d  %s\n", $addr, $lineno, $line) if $listing;
+
+    # Skip blank lines.
+    next if $line =~ /^\s*$/;
+
+    # Skip comment lines.
+    next if $line =~ /^\s*;/;
+    next if $line =~ /^\s*\*/;
+
+    # Process .org lines.
+    #if ($line =~ /^\.org\s+(.+)/) {
+    #  my $operand = $1;
+    #  $operand =~ s/^\$//;
+    #  $base = hex(lc($operand));
+    #  $addr = $base;
+    #  print sprintf("%%%%%%%% base=%s \$%02x\n", $base, $base) if $verbose;
+    #  next;
+    #}
+    # Parse .alias lines.
+    #if ($line =~ /^\.alias\s+(\S+)\s+(.+)/) {
+    #  my $alias = $1;
+    #  my $val = $2;
+    #  $val =~ s/\s*;(.+)$//;
+    #  $symbols{$alias} = $val;
+    #  print "%%%% alias $alias $val\n" if $verbose;
+    #  next;
+    #}
+
+    # Parse input lines.
+    my ($label, $mnemonic, $operand, $comment) = parse_line($line, $lineno);
+
+    my $rv;
+
+    # Look for symbols.
+    if (defined $label && $label ne '' && $label ne ';' && $mnemonic !~ /EQU|\.EQ|^=$/i) {
+      my $symbol = $label;
+      if (! defined $symbols{$symbol}) {
+        print sprintf("%%%%%%%% Saving symbol $label %s \$%04x\n", $addr, $addr) if $verbose;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+    }
+
+    next unless defined $mnemonic;
+    next if $mnemonic eq '';
+
+    my $ucmnemonic = uc($mnemonic);
+
+    #if ($in_macro) {
+    #  if ($ucmnemonic ne '<<<') {
+    #    print "%%%% Saving $line to macro $cur_macro\n";
+    #    push @{$macros{$cur_macro}}, $line;
+    #  }
+    #}
+
+    # We only need to look for ORG and EQU on pass 1.
+    if ($ucmnemonic =~ /ORG|\.OR/) {
+      # Set base
+      #$operand =~ s/^\$//;
+      #$base = hex(lc($operand));
+      #$addr = $base;
+      #print sprintf("%%%%%%%% Setting base to \$%04x\n", $base) if $verbose;
+    } elsif ($ucmnemonic =~ /EQU|\.EQ|^=$/i) {
+      # define constant
+      my $symbol = $label;
+      if (! defined $symbols{$symbol}) {
+        print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
+        #if ($operand =~ /^\$([0-9a-fA-F]+)$/) {
+        #  $symbols{$symbol} = lc($operand);
+        ## 8 bit binary
+        #} elsif ($operand =~ /^%([01]{8})$/) {
+        #  $symbols{$symbol} = '$' . sprintf("%02x", unpack('C', pack("B8", $1)));
+        ## 16 bit binary
+        #} elsif ($operand =~ /^%([01]{8})([01]{8})$/) {
+        #  $symbols{$symbol} = '$' . sprintf("%02x", unpack('C', pack("B8", $1))) . sprintf("%02x", unpack('C', pack("B8", $2)));
+
+        # Handle symbol
+        #} elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
+        if ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
+          my $symval = $symbols{$2};
+          if (defined $symval) {
+            # Handle < and >.
+            if (defined $1 && $1 eq '<') {
+              if ($symval =~ /\$([0-9a-fA-F]{1,2})/) {
+                $symbols{$symbol} = $1;
+              }
+            } elsif (defined $1 && $1 eq '>') {
+              if ($symval =~ /\$[0-9a-fA-F]*([0-9a-fA-F]{1,2})/) {
+                $symbols{$symbol} = $1;
+              }
+            } else {
+              $symbols{$symbol} = $symval;
+            }
+          } else {
+            print "**** $lineno - Unknown symbol '$2' in '$line'\n";
+          }
+        # Allow arithmetic on symbol
+        } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$*[0-9a-fA-F]+)$/) {
+          # Add
+          $symbols{$symbol} = sprintf("\$%x", sym_add($symbols{$2}, $3));
+        } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$*[0-9a-fA-F]+)$/) {
+          # Subtract
+          $symbols{$symbol} = sprintf("\$%x", sym_sub($symbols{$2}, $3));
+        } else {
+          $symbols{$symbol} = $operand;
+        }
+      }
+    } elsif ($ucmnemonic =~ /HEX/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        if (! defined $symbols{$symbol}) {
+          $symbols{$symbol} = sprintf("\$%04x", $addr);
+        }
+      }
+      if ($operand =~ /([0-9a-fA-F]+)/) {
+         $addr += (length($1) / 2);
+      ##FIXME -- need to handle symbols here.
+      }
+    } elsif ($ucmnemonic =~ /^DS$/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        if (! defined $symbols{$symbol}) {
+          $symbols{$symbol} = sprintf("\$%04x", $addr);
+        }
+      }
+      if ($operand =~ /\$([0-9a-fA-F]+)/) {
+         $addr += hex(lc($1));
+      } elsif ($operand =~ /^(\d+)/) {
+         $addr += $1;
+      ##FIXME -- need to handle symbols here.
+      }
+    } elsif ($ucmnemonic =~ /^DB$/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      $addr++;
+    } elsif ($ucmnemonic =~ /^DA$|^\.DA$/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        if (! defined $symbols{$symbol}) {
+          $symbols{$symbol} = sprintf("\$%04x", $addr);
+        }
+      }
+      $addr += 2;
+    } elsif ($ucmnemonic =~ /DFB/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        if (! defined $symbols{$symbol}) {
+          $symbols{$symbol} = sprintf("\$%04x", $addr);
+        }
+      }
+      if ($operand =~ /^%([01]{8})/) {
+        $addr++;
+      } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
+        $addr++;
+      } elsif ($operand =~ /^#<(.+)/) {
+        $addr++;
+      } elsif ($operand =~ /^#>(.+)/) {
+        $addr++;
+      # Allow symbol arithmatic.
+      } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*([+-])\s*(\$*[0-9a-fA-F]+)$/) {
+        my $symval = $symbols{$1};
+        if (defined $symval) {
+          if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
+            $addr++;
+          } elsif ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
+            $addr += 2;
+          }
+        } else {
+          print "**** $lineno - Unknown symbol '$1' in '$line'\n";
+        }
+      # Allow symbols.
+      } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*$/) {
+        my $symval = $symbols{$1};
+        if (defined $symval) {
+          if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
+            $addr++;
+          } elsif ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
+            $addr += 2;
+          }
+        } else {
+          print "**** $lineno - Unknown symbol '$1' in '$line'\n";
+        }
+      } else {
+        my @symbols = split(',', $operand);
+        my @bytes;
+        foreach my $sym (@symbols) {
+          my $symval = get_symval($sym);
+          if (defined $symval) {
+            push @bytes, sprintf("%02x", parse_symval($symval));
+          } else {
+            print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
+          }
+        }
+        $addr += scalar(@bytes);
+      }
+    } elsif ($ucmnemonic =~ /ASC|DCI|INV|FLS|BLK|REV|STR/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        if (! defined $symbols{$symbol}) {
+          $symbols{$symbol} = sprintf("\$%04x", $addr);
+        }
+      }
+      my $str = '';
+      my $trl;
+      if ($operand =~ /^\"(.+)\"([0-9a-fA-F]*)$/) {
+        $str = $1;
+        $trl = $2;
+      } elsif ($operand =~ /^'(.+)'([0-9a-fA-F]*)$/) {
+        $str = $1;
+        $trl = $2;
+      }
+      $addr += length($str);
+      $addr++ if defined $trl;
+    } elsif ($ucmnemonic =~ /HBY/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        if (! defined $symbols{$symbol}) {
+          $symbols{$symbol} = sprintf("\$%04x", $addr);
+        }
+      }
+      ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /BYT/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /DFS/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END|SAV|\.TF/) {
+      # Just ignore this
+    #} elsif ($ucmnemonic =~ /MAC/) {
+    #  print "**** MACRO START **** '$line'\n" if $debug;
+    #  $macros{$label} = ();
+    #  $in_macro = 1;
+    #  $cur_macro = $label;
+    #} elsif ($ucmnemonic =~ /\<\<\</) {
+    #  print "**** MACRO END **** '$line'\n" if $debug;
+    #  $in_macro = 0;
+    #  $cur_macro = '';
     # Mnemonic	Addressing mode	Form		Opcode	Size	Timing
     } elsif (defined $mnemonics{$ucmnemonic}) {
       my $foundit = 0;
@@ -2705,7 +3043,7 @@ if (open($ifh, "<$input_file")) {
     my $ucmnemonic = uc($mnemonic);
 
     # Skip ORG, EQU and OBJ on pass 2.
-    if ($ucmnemonic =~ /ORG|EQU|\.EQ|OBJ|LST|^=$|END|SAV/) {
+    if ($ucmnemonic =~ /ORG|\.OR|EQU|\.EQ|OBJ|LST|^=$|END|SAV|\.TF/) {
       print sprintf("                 %-4d  %s\n", $lineno, $line) if $code_listing;
       next;
     }
@@ -2788,6 +3126,44 @@ if (open($ifh, "<$input_file")) {
           generate_8($ofh, $addr, 0x00, $lineno, $line);
         }
         $addr++;
+      # Allow symbol arithmatic.
+      } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*([+-])\s*(\$*[0-9a-fA-F]+)$/) {
+        my $sym = $1;
+        my $op = $2;
+        my $val = $3; 
+        if ($val =~ /^\$([0-9a-fA-F]+)/) {
+          $val = hex(lc($1));
+        }
+        my $symval = get_symval($sym);
+        if (defined $symval) {
+          if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
+            my $opval = hex(lc($1));
+            if ($op eq '+') {
+              $opval += $val;
+            } elsif ($op eq '-') {
+              $opval -= $val;
+            }
+            generate_8($ofh, $addr, $opval, $lineno, $line);
+            $addr++;
+          } elsif ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])/) {
+            my $opval = hex(lc($1));
+            if ($op eq '+') {
+              $opval += $val;
+            } elsif ($op eq '-') {
+              $opval -= $val;
+            }
+            my $opv = sprintf("%04x", $opval);
+            my $opval1 = hex(lc(substr($opv, 0, 2)));
+            my $opval2 = hex(lc(substr($opv, 2, 2)));
+            generate_16($ofh, $addr, $opval1, $opval2, $lineno, $line);
+            $addr += 2;
+          }
+        } else {
+          print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
+          generate_8($ofh, $addr, 0x00, $lineno, $line);
+          $addr++;
+        }
+      ##FIXME - Allow symbols here
       } elsif ($operand =~ /[0-9a-fA-F][0-9a-fA-F],*/) {
         #my @bytes = split(',', $operand);
         my @symbols = split(',', $operand);
@@ -2843,7 +3219,7 @@ if (open($ifh, "<$input_file")) {
         generate_8($ofh, $addr, $opval, $lineno, $line);
         $addr++;
       }
-    } elsif ($ucmnemonic =~ /^DA$/) {
+    } elsif ($ucmnemonic =~ /^DA$|^\.DA$/) {
       # Handle binary.
       if ($operand =~ /^%([01]{16})/) {
         my $opval1 = unpack('C', pack("B8", substr($1, 0, 8)));
