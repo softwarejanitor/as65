@@ -791,6 +791,9 @@ sub generate_16 {
 
   $opval = 0x00 unless defined $opval;
 
+  if ($opval =~ /^\$([0-9a-fA-F]{1,2})$/) {
+    $opval = hex(lc($1));
+  }
   print sprintf("%04x:  %02x %02x     %-4d  %s\n", $addr, $opcode, $opval, $lineno, $line) if $code_listing;
   print $ofh pack("C", $opcode);
   print $ofh pack("C", $opval);
@@ -858,6 +861,8 @@ sub parse_symval {
 sub sym_add {
   my ($symval, $offset) = @_;
 
+  $symval = 0 unless defined $symval;
+
   my $roff = $offset;
   if ($offset =~ /\$([0-9a-fA-F]*)/) {
     $roff = hex(lc($1));
@@ -868,6 +873,8 @@ sub sym_add {
 
 sub sym_sub {
   my ($symval, $offset) = @_;
+
+  $symval = 0 unless defined $symval;
 
   my $roff = $offset;
   if ($offset =~ /\$([0-9a-fA-F]*)/) {
@@ -2147,7 +2154,10 @@ sub generate_Relative {
     }
   # Handle symbol arithmetic
   } elsif ($operand =~ /^([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*([+-])\s*(\$*[0-9a-fA-F]+)$/) {
-    my $symval = $symbols{$1};
+    my $sym = $1;
+    my $op = $2;
+    my $val = $3;
+    my $symval = $symbols{$sym};
     if (defined $symval) {
       my $opval = lc($symval);
       if ($symval =~ /^\$([0-9a-fA-F]+)$/) {
@@ -2156,10 +2166,10 @@ sub generate_Relative {
         $opval = $symval;
       }
 
-      if ($2 eq '+') {
-        $opval += $3;
-      } elsif ($2 eq '-') {
-        $opval -= $3;
+      if ($op eq '+') {
+        $opval += $val;
+      } elsif ($op eq '-') {
+        $opval -= $val;
       }
 
       my $rel = (0 - ($addr - $opval)) + 254;
@@ -2515,10 +2525,30 @@ if (open($ifh, "<$input_file")) {
       # Allow arithmetic on symbol
       } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$*[0-9a-fA-F]+)$/) {
         # Add
-        $symbols{$symbol} = sprintf("\$%x", sym_add($symbols{$2}, $3));
-      } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*(\$*[0-9a-fA-F]+)$/) {
+        ##FIXME -- need to handle < and > here.
+        my $sym = $2;
+        my $opv = $3;
+        if (defined $sym) {
+          my $symv = $symbols{$sym};
+          if (defined $symv) {
+            $symbols{$symbol} = sprintf("\$%x", sym_add($symv, $opv));
+          } else {
+            print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
+          }
+        }
+      } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[-]\s*(\$*[0-9a-fA-F]+)$/) {
         # Subtract
-        $symbols{$symbol} = sprintf("\$%x", sym_sub($symbols{$2}, $3));
+        ##FIXME -- need to handle < and > here.
+        my $sym = $2;
+        my $opv = $3;
+        if (defined $sym) {
+          my $symv = $symbols{$sym};
+          if (defined $symv) {
+            $symbols{$symbol} = sprintf("\$%x", sym_sub($symv, $opv));
+          } else {
+            print "**** $lineno - Unknown symbol '$sym' in '$line'\n";
+          }
+        }
       } else {
         $symbols{$symbol} = $operand;
       }
