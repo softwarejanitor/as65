@@ -20,7 +20,7 @@ my $error_summary = 1;  # Output error summary, default to on.
 my %symbols = ();  # Hash of symbol table values.
 my %macros = ();  # Hash of macros.
 
-my @errors = [];
+my @errors = ();
 
 my $in_macro = 0;
 my $cur_macro = '';
@@ -2492,29 +2492,14 @@ print ">>>> IN CONDITIONAL\n";
           print_err("**** $lineno - Unknown symbol '$2' in '$line'\n");
         }
       # Allow arithmetic on symbol
-      } elsif ($operand =~ /^([<>]*)([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*[#]*(\$*[0-9a-fA-F]+)$/) {
-        # Add
-        ##FIXME -- need to handle < and > here.
+      } elsif ($operand =~ /^([<>]*)([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*([+-\\*\/])\s*[#]*(\$*[0-9a-fA-F]+)$/) {
         my $sym = $2;
+        my $op = $2;
         my $opv = $3;
         if (defined $sym) {
           my $symv = $symbols{$sym};
           if (defined $symv) {
-            $symbols{$symbol} = sprintf("\$%x", sym_op($symv, '+', $opv));
-            print "%%%% Saving Symbol $symbol $symbols{$symbol}\n" if $verbose;
-          } else {
-            print_err("**** $lineno - Unknown symbol '$sym' in '$line'\n");
-          }
-        }
-      } elsif ($operand =~ /^([<>]*)([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[-]\s*[#]*(\$*[0-9a-fA-F]+)$/) {
-        # Subtract
-        ##FIXME -- need to handle < and > here.
-        my $sym = $2;
-        my $opv = $3;
-        if (defined $sym) {
-          my $symv = $symbols{$sym};
-          if (defined $symv) {
-            $symbols{$symbol} = sprintf("\$%x", sym_op($symv, '-', $opv));
+            $symbols{$symbol} = sprintf("\$%x", sym_op($symv, $op, $opv));
             print "%%%% Saving Symbol $symbol $symbols{$symbol}\n" if $verbose;
           } else {
             print_err("**** $lineno - Unknown symbol '$sym' in '$line'\n");
@@ -3470,6 +3455,21 @@ print ">>>>  END CONDITIONAL\n";
   close $ofh;
 
   close $ifh;
+
+  # Output error summary.
+  if ($error_summary) {
+    print "\n";
+    if (scalar @errors) {
+      print "**** Summary of errors:\n";
+      print "\n";
+      foreach my $line (@errors) {
+        print $line;
+      }
+      print "\n";
+    } else {
+      print "**** No errors. ****\n";
+    }
+  }
 } else {
   die "Can't open $input_file\n";
 }
