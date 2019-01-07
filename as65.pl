@@ -2453,6 +2453,12 @@ my $ifh;
 
 my $lineno = 0;
 
+my $in_include = 0;
+
+my $ififh;
+
+my $ilineno = 0;
+
 # Open the input file.
 if (open($ifh, "<$input_file")) {
 
@@ -2461,12 +2467,45 @@ if (open($ifh, "<$input_file")) {
   print "\n" if $verbose;
 
   # Pass 1, build symbol table.
-  while (my $line = readline $ifh) {
-    chomp $line;
+  #while (my $line = readline $ifh) {
+  while (!eof($ifh)) {
+    my $line = '';
+    if ($in_include) {
+      $line = readline $ififh;
 
-    $lineno++;
+      chomp $line;
 
-    print sprintf("%04x:  %-4d  %s\n", $addr, $lineno, $line) if $listing;
+      $ilineno++;
+
+      print $COUT_YELLOW . sprintf("%04x:  %-4d  %s\n", $addr, $ilineno, $line) . $COUT_NORMAL if $listing;
+
+#print $COUT_GREEN . "line=$line\n" . $COUT_NORMAL;
+
+      if (eof($ififh)) {
+        $in_include = 0;
+        print $COUT_GREEN . "---- END INCLUDE ----\n" . $COUT_NORMAL if $debug;
+      }
+    } else {
+      $line = readline $ifh;
+
+      $lineno++;
+
+      chomp $line;
+
+      print sprintf("%04x:  %-4d  %s\n", $addr, $lineno, $line) if $listing;
+    }
+
+    # Handle include files.
+    if ($line =~ /^#include "([^"]+)"\s*\;*.*/) {
+      if (open($ififh, "<$1")) {
+        print $COUT_GREEN . "---- INCLUDING $1 ----\n" . $COUT_NORMAL if $debug;
+        $in_include = 1;
+        $ilineno = 0;
+      } else {
+        print_err("**** Unable to open $1\n");
+      }
+      next;
+    }
 
     # Skip blank lines.
     next if $line =~ /^\s*$/;
@@ -2502,7 +2541,7 @@ if (open($ifh, "<$input_file")) {
     # Look for symbols.
     if (defined $label && $label ne '' && $label ne ';' && $mnemonic !~ /EQU|\.EQ|^=$/i) {
       my $symbol = $label;
-      print sprintf("%%%%%%%% Saving symbol $label %s \$%04x\n", $addr, $addr) if $verbose;
+      print $COUT_AQUA . sprintf("%%%%%%%% Saving symbol $label %s \$%04x\n", $addr, $addr) . $COUT_NORMAL if $verbose;
       $symbols{$symbol} = sprintf("\$%04x", $addr);
     }
 
@@ -2513,7 +2552,7 @@ if (open($ifh, "<$input_file")) {
 
     if ($in_macro) {
       if ($ucmnemonic ne '<<<') {
-        print "%%%% Saving $line to macro $cur_macro\n";
+        print $COUT_AQUA . "%%%% Saving $line to macro $cur_macro\n" . $COUT_NORMAL;
         push @{$macros{$cur_macro}}, $line;
       }
     }
@@ -2536,7 +2575,7 @@ print ">>>> IN CONDITIONAL\n";
     } elsif ($ucmnemonic =~ /EQU|\.EQ|^=$/i) {
       # define constant
       my $symbol = $label;
-      #print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
+      #print $COUT_AQUA . "%%%% Saving Symbol $symbol $operand\n" . $COUT_NORMAL if $verbose;
       # Hex
       if ($operand =~ /^\$([0-9a-fA-F]+)$/) {
         $symbols{$symbol} = lc($operand);
@@ -2546,11 +2585,11 @@ print ">>>> IN CONDITIONAL\n";
       # 8 bit binary
       } elsif ($operand =~ /^%([01]{8})$/) {
         $symbols{$symbol} = '$' . sprintf("%02x", unpack('C', pack("B8", $1)));
-        print "%%%% Saving Symbol $symbol $symbols{$symbol}\n" if $verbose;
+        print $COUT_AQUA . "%%%% Saving Symbol $symbol $symbols{$symbol}\n" . $COUT_NORMAL if $verbose;
       # 16 bit binary
       } elsif ($operand =~ /^%([01]{8})([01]{8})$/) {
         $symbols{$symbol} = '$' . sprintf("%02x", unpack('C', pack("B8", $1))) . sprintf("%02x", unpack('C', pack("B8", $2)));
-        print "%%%% Saving Symbol $symbol $symbols{$symbol}\n" if $verbose;
+        print $COUT_AQUA . "%%%% Saving Symbol $symbol $symbols{$symbol}\n" . $COUT_NORMAL if $verbose;
       } elsif ($operand eq '*') {
         $symbols{$symbol} = sprintf("\$%x", $addr);
       # Handle symbol
@@ -2565,16 +2604,16 @@ print ">>>> IN CONDITIONAL\n";
           if (defined $prt && $prt eq '<') {
             if ($symval =~ /\$([0-9a-fA-F]{1,2})/) {
               $symbols{$symbol} = $1;
-              print "%%%% Saving Symbol $symbol $1\n" if $verbose;
+              print $COUT_AQUA . "%%%% Saving Symbol $symbol $1\n" . $COUT_NORMAL if $verbose;
             }
           } elsif (defined $prt && $prt eq '>') {
             if ($symval =~ /\$[0-9a-fA-F]*([0-9a-fA-F]{1,2})/) {
               $symbols{$symbol} = $1;
-              print "%%%% Saving Symbol $symbol $1\n" if $verbose;
+              print $COUT_AQUA . "%%%% Saving Symbol $symbol $1\n" . $COUT_NORMAL if $verbose;
             }
           } else {
             $symbols{$symbol} = $symval;
-            print "%%%% Saving Symbol $symbol $symval\n" if $verbose;
+            print $COUT_AQUA . "%%%% Saving Symbol $symbol $symval\n" . $COUT_NORMAL if $verbose;
           }
         } else {
           print_err("**** $lineno - Unknown symbol '$2' in '$line'\n");
@@ -2591,13 +2630,13 @@ print ">>>> IN CONDITIONAL\n";
           $symv = $symbols{':' . $sym} unless defined $symv;
           if (defined $symv) {
             $symbols{$symbol} = sprintf("\$%x", sym_op($symv, $op, $opv));
-            print "%%%% Saving Symbol $symbol $symbols{$symbol}\n" if $verbose;
+            print $COUT_AQUA . "%%%% Saving Symbol $symbol $symbols{$symbol}\n" . $COUT_NORMAL if $verbose;
           } else {
             print_err("**** $lineno - Unknown symbol '$sym' in '$line'\n");
           }
         }
       } else {
-        print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
+        print $COUT_AQUA . "%%%% Saving Symbol $symbol $operand\n" . $COUT_NORMAL if $verbose;
         $symbols{$symbol} = $operand;
       }
     } elsif ($ucmnemonic =~ /HEX/) {
@@ -2815,14 +2854,38 @@ print ">>>>  DO  $operand\n";
   $checksum = 0;
   $in_macro = 0;
   $in_conditional = 0;
+  $in_include = 0;
 
   # Pass 1.5, build symbol table.
-  while (my $line = readline $ifh) {
+  #while (my $line = readline $ifh) {
+  while (!eof($ifh)) {
+    my $line = '';
+    if ($in_include) {
+      $line = readline $ififh;
+
+      $ilineno++;
+
+      $in_include = 0 if eof($ififh);
+    } else {
+      $line = readline $ifh;
+
+      $lineno++;
+    }
+
     chomp $line;
 
-    $lineno++;
-
     #print sprintf("%04x:  %-4d  %s\n", $addr, $lineno, $line) if $listing;
+
+    # Handle include files.
+    if ($line =~ /^#include "([^"]+)"\s*\;*.*/) {
+      if (open($ififh, "<$1")) {
+        $in_include = 1;
+        $ilineno = 0;
+      } else {
+        print_err("**** Unable to open $1\n");
+      }
+      next;
+    }
 
     # Skip blank lines.
     next if $line =~ /^\s*$/;
@@ -2859,7 +2922,7 @@ print ">>>>  DO  $operand\n";
     if (defined $label && $label ne '' && $label ne ';' && $mnemonic !~ /EQU|\.EQ|^=$/i) {
       my $symbol = $label;
       if (! defined $symbols{$symbol}) {
-        print sprintf("%%%%%%%% Saving symbol $label %s \$%04x\n", $addr, $addr) if $verbose;
+        print $COUT_AQUA . sprintf("%%%%%%%% Saving symbol $label %s \$%04x\n", $addr, $addr) . $COUT_NORMAL if $verbose;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
     }
@@ -2871,7 +2934,7 @@ print ">>>>  DO  $operand\n";
 
     #if ($in_macro) {
     #  if ($ucmnemonic ne '<<<') {
-    #    print "%%%% Saving $line to macro $cur_macro\n";
+    #    print $COUT_AQUA . "%%%% Saving $line to macro $cur_macro\n" . $COUT_NORMAL;
     #    push @{$macros{$cur_macro}}, $line;
     #  }
     #}
@@ -2887,7 +2950,7 @@ print ">>>>  DO  $operand\n";
       # define constant
       my $symbol = $label;
       if (! defined $symbols{$symbol}) {
-        #print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
+        #print $COUT_AQUA . "%%%% Saving Symbol $symbol $operand\n" . $COUT_NORMAL if $verbose;
         #if ($operand =~ /^\$([0-9a-fA-F]+)$/) {
         #  $symbols{$symbol} = lc($operand);
         ## 8 bit binary
@@ -2909,16 +2972,16 @@ print ">>>>  DO  $operand\n";
             if (defined $prt && $prt eq '<') {
               if ($symval =~ /\$([0-9a-fA-F]{1,2})/) {
                 $symbols{$symbol} = $1;
-                print "%%%% Saving Symbol $symbol $1\n" if $verbose;
+                print $COUT_AQUA . "%%%% Saving Symbol $symbol $1\n" . $COUT_NORMAL if $verbose;
               }
             } elsif (defined $prt && $prt eq '>') {
               if ($symval =~ /\$[0-9a-fA-F]*([0-9a-fA-F]{1,2})/) {
                 $symbols{$symbol} = $1;
-                print "%%%% Saving Symbol $symbol $1\n" if $verbose;
+                print $COUT_AQUA . "%%%% Saving Symbol $symbol $1\n" . $COUT_NORMAL if $verbose;
               }
             } else {
               $symbols{$symbol} = $symval;
-              print "%%%% Saving Symbol $symbol $symval\n" if $verbose;
+              print $COUT_AQUA . "%%%% Saving Symbol $symbol $symval\n" . $COUT_NORMAL if $verbose;
             }
           } else {
             print_err("**** $lineno - Unknown symbol '$2' in '$line'\n");
@@ -2927,14 +2990,14 @@ print ">>>>  DO  $operand\n";
         } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*[#]*(\$*[0-9a-fA-F]+)$/) {
           # Add
           $symbols{$symbol} = sprintf("\$%x", sym_op($symbols{$2}, '+', $3));
-          print "%%%% Saving Symbol $symbol $symbols{$symbol}\n" if $verbose;
+          print $COUT_AQUA . "%%%% Saving Symbol $symbol $symbols{$symbol}\n" . $COUT_NORMAL if $verbose;
         } elsif ($operand =~ /^([<>]*)([A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[-]\s*[#]*(\$*[0-9a-fA-F]+)$/) {
           # Subtract
           $symbols{$symbol} = sprintf("\$%x", sym_op($symbols{$2}, '-', $3));
-          print "%%%% Saving Symbol $symbol $symbols{$symbol}\n" if $verbose;
+          print $COUT_AQUA . "%%%% Saving Symbol $symbol $symbols{$symbol}\n" . $COUT_NORMAL if $verbose;
         } else {
           $symbols{$symbol} = $operand;
-          print "%%%% Saving Symbol $symbol $operand\n" if $verbose;
+          print $COUT_AQUA . "%%%% Saving Symbol $symbol $operand\n" . $COUT_NORMAL if $verbose;
         }
       }
     } elsif ($ucmnemonic =~ /HEX/) {
@@ -3170,15 +3233,40 @@ print ">>>> END CONDITIONAL\n";
   $in_macro = 0;
   $in_conditional = 0;
 
+  $in_include = 0;
+
   # Pass two, generate output
   open($ofh, ">$output_file") or die "Can't write $output_file\n";
 
   binmode $ofh;
 
-  while (my $line = readline $ifh) {
+  #while (my $line = readline $ifh) {
+  while (!eof($ifh)) {
+    my $line = '';
+    if ($in_include) {
+      $line = readline $ififh;
+
+      $ilineno++;
+
+      $in_include = 0 if eof($ififh);
+    } else {
+      $line = readline $ifh;
+
+      $lineno++;
+    }
+
     chomp $line;
 
-    $lineno++;
+    # Handle include files.
+    if ($line =~ /^#include "([^"]+)"\s*\;*.*/) {
+      if (open($ififh, "<$1")) {
+        $in_include = 1;
+        $ilineno = 0;
+      } else {
+        print_err("**** Unable to open $1\n");
+      }
+      next;
+    }
 
     # Skip blank lines, comment lines, .org .alias.
     if ($line =~ /^\s*$|^\s*;|^\s*\*|^\.org\s+.+|^\.alias\s+\S+\s+.+/) {
