@@ -2746,8 +2746,9 @@ print ">>>> IN CONDITIONAL\n";
         $str = $1;
         $trl = $2;
       }
-      $addr += length($str);
+      $addr += (length($str) - 1);
       $addr++ if defined $trl;
+##FIXME -- need to test this
     } elsif ($ucmnemonic =~ /HBY/) {
       if ($label ne '') {
         my $symbol = $label;
@@ -3124,8 +3125,9 @@ print ">>>>  DO  $operand\n";
         $str = $1;
         $trl = $2;
       }
-      $addr += length($str);
+      $addr += (length($str) - 1);
       $addr++ if defined $trl;
+##FIXME -- need to test this
     } elsif ($ucmnemonic =~ /HBY/) {
       if ($label ne '') {
         my $symbol = $label;
