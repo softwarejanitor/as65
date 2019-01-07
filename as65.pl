@@ -34,6 +34,16 @@ my $output_file = '';  # Output file, required to be set with -o command line fl
 
 my $checksum = 0;
 
+my $COUT_BOLD = "\e[1m";
+my $COUT_YELLOW = "\e[1;33m";
+my $COUT_NORMAL = "\e[1;37m";
+my $COUT_DIM = "\e[0;37m";
+my $COUT_BROWN = "\e[0;33m";
+my $COUT_RED = "\e[1;31m";
+my $COUT_GREEN = "\e[1;32m";
+my $COUT_VIOLET = "\e[1;35m";
+my $COUT_AQUA = "\e[1;36m";
+
 sub usage {
   print "Usage:\n";
   print "$0 [-a addr] [-x \$addr] [-v] [-q] [-d] [-s] [-l] [-c] [-h] <input_file>\n";
@@ -47,6 +57,7 @@ sub usage {
   print " -l : Listing (source pass 1) (default off)\n";
   print " -c : Generated code listing (default on)\n";
   print " -e : Generated error summary (default on)\n";
+  print " -C : Toggle color output (default on)\n";
   print " -h : This help\n";
 }
 
@@ -94,6 +105,18 @@ while (defined $ARGV[0] && $ARGV[0] =~ /^-/) {
   # Error summary.
   } elsif ($ARGV[0] eq '-e') {
     $error_summary = 0;
+    shift;
+  # Toggle color output (default on).
+  } elsif ($ARGV[0] eq '-C') {
+    $COUT_BOLD = "";
+    $COUT_YELLOW = "";
+    $COUT_NORMAL = "";
+    $COUT_DIM = "";
+    $COUT_BROWN = "";
+    $COUT_RED = "";
+    $COUT_GREEN = "";
+    $COUT_VIOLET = "";
+    $COUT_AQUA = "";
     shift;
   # Help.
   } elsif ($ARGV[0] eq '-h') {
@@ -785,7 +808,7 @@ sub print_err {
 
   push @errors, $line;
 
-  print $line;
+  print $COUT_RED . $line . $COUT_NORMAL;
 }
 
 sub calc_checksum {
@@ -863,6 +886,8 @@ sub get_symval {
   my ($prt, $sym) = @_;
 
   my $val = $symbols{$sym};
+  $val = $symbols{$sym . ':'} unless defined $val;
+  $val = $symbols{':' . $sym} unless defined $val;
   if (defined $val) {
     # Get high byte.
     if (defined $prt && $prt eq '<') {
@@ -901,6 +926,27 @@ sub get_symval {
     }
   }
   return $val;
+}
+
+sub is_symbol {
+  my ($operand) = @_;
+
+  return 1 if $operand =~ /^([\<\>]*)([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*$/;
+
+  return 0;
+}
+
+sub parse_symbol {
+  my ($operand) = @_;
+
+  my $prt = '';
+  my $sym = '';
+  if ($operand =~ /^([\<\>]*)([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*$/) {
+    $prt = $1;
+    $sym = $2;
+  }
+  $prt = '' unless defined $prt;
+  return get_symval($prt, $sym);
 }
 
 sub parse_symval {
@@ -951,6 +997,8 @@ sub handle_8_bit_symbol {
   my ($ofh, $lineno, $addr, $opcode, $prt, $symbol, $op, $val, $line) = @_;
 
   my $symval = $symbols{$symbol};
+  $symval = $symbols{$symbol . ':'} unless defined $symval;
+  $symval = $symbols{':' . $symbol} unless defined $symval;
   if (defined $symval) {
     my $opval = $symval;
     # $prt is used to specify the 1st or 2nd byte.
@@ -994,6 +1042,8 @@ sub handle_16_bit_symbol {
   my ($ofh, $lineno, $addr, $opcode, $symbol, $op, $val, $line) = @_;
 
   my $symval = $symbols{$symbol};
+  $symval = $symbols{$symbol . ':'} unless defined $symval;
+  $symval = $symbols{':' . $symbol} unless defined $symval;
   if (defined $symval) {
     my $opval1 = 0;
     my $opval2 = 0;
@@ -1004,7 +1054,7 @@ sub handle_16_bit_symbol {
     }
     generate_24($ofh, $addr, $opcode, $opval2, $opval1, $lineno, $line);
   } else {
-    print_err("**** $lineno - Unknown symbol '$symbol in '$line''\n");
+    print_err("**** $lineno - Unknown symbol '$symbol' in '$line'\n");
     generate_24($ofh, $addr, $opcode, 0x00, 0x00, $lineno, $line);
   }
 }
@@ -1130,6 +1180,8 @@ sub is_Zero_Page {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
     # Not Zero Page if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1145,6 +1197,8 @@ sub is_Zero_Page {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-\\*\/]\s*\$*[0-9a-fA-F]+$/) {
     # Not Zero Page if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1229,6 +1283,8 @@ sub is_Zero_Page_X {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*),[Xx]$/) {
     # Not Zero Page,X if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1243,6 +1299,8 @@ sub is_Zero_Page_X {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-\\*\/]\s*[#]*\$*[0-9a-fA-F]+,[Xx]$/) {
     # Not Zero Page,X if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1312,6 +1370,8 @@ sub is_Zero_Page_Y {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*),[Yy]$/) {
     # Not Zero Page,Y if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1326,6 +1386,8 @@ sub is_Zero_Page_Y {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-\\*\/]\s*[#]*\$*[0-9a-fA-F]+,[Yy]$/) {
     # Not Zero Page,Y if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1418,6 +1480,8 @@ sub is_Absolute {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
     # Not Ansolute if the symbol is not 16 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
@@ -1425,6 +1489,8 @@ sub is_Absolute {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-\\*\/]\s*[#]*\$*[0-9a-fA-F]+$/) {
     # Not Ansolute if the symbol is not 16 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
@@ -1625,6 +1691,8 @@ sub is_Absolute_X {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*),[Xx]$/) {
     # Not Ansolute,X if the symbol is not 16 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
@@ -1632,6 +1700,8 @@ sub is_Absolute_X {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-\\*\/]\s*[#]*(\$*[0-9a-fA-F]+),[Xx]$/) {
     # Not Ansolute,X if the symbol is not 16 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
@@ -1701,6 +1771,8 @@ sub is_Absolute_Y {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*),[Yy]$/) {
     # Not Ansolute,Y if the symbol is not 16 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
@@ -1708,6 +1780,8 @@ sub is_Absolute_Y {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-\\*\/]\s*[#]*(\$*[0-9a-fA-F]+),[Yy]/) {
     # Not Ansolute,Y if the symbol is not 16 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       return 0 if $symval =~ /^\$[0-9a-fA-F][0-9a-fA-F]$|^%[01]{8}$/;
     }
@@ -1778,6 +1852,8 @@ sub is_Indirect_Zero_Page_X {
   } elsif ($operand =~ /^\(([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*),[Xx]\)$/) {
     # Not Indirect Zero Page,X if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1792,6 +1868,8 @@ sub is_Indirect_Zero_Page_X {
   } elsif ($operand =~ /^\(([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-\\*\/]\s*[#]*(\$*[0-9a-fA-F]+),[Xx]\)/) {
     # Not Indirect Zero Page,X if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1936,6 +2014,8 @@ sub is_Indirect_Zero_Page {
   } elsif ($operand =~ /^\(([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\)$/) {
     # Not Indirect Zero Page if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -1950,6 +2030,8 @@ sub is_Indirect_Zero_Page {
   } elsif ($operand =~ /^\(([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+-\\*\/]\s*[#]*(\$*[0-9a-fA-F]+)\)$/) {
     # Not Indirect Zero Page if the symbol is not 8 bits.
     my $symval = $symbols{$1};
+    $symval = $symbols{$1 . ':'} unless defined $symval;
+    $symval = $symbols{':' . $1} unless defined $symval;
     if (defined $symval) {
       if ($symval =~ /^\d+$/) {
         return 0 if ($symval > 255);
@@ -2076,6 +2158,8 @@ sub generate_Relative {
   } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
     my $symbol = $1;
     my $symval = $symbols{$symbol};
+    $symval = $symbols{$symbol . ':'} unless defined $symval;
+    $symval = $symbols{':' . $symbol} unless defined $symval;
     if (defined $symval) {
       my $opval = lc($symval);
       if ($symval =~ /^\$([0-9a-fA-F]+)$/) {
@@ -2106,6 +2190,8 @@ sub generate_Relative {
     my $op = $2;
     my $val = $3;
     my $symval = $symbols{$sym};
+    $symval = $symbols{$sym . ':'} unless defined $symval;
+    $symval = $symbols{':' . $sym} unless defined $symval;
     if (defined $symval) {
       my $opval = lc($symval);
       if ($symval =~ /^\$([0-9a-fA-F]+)$/) {
@@ -2472,6 +2558,8 @@ print ">>>> IN CONDITIONAL\n";
         my $prt = $1;
         my $sym = $2;
         my $symval = $symbols{$sym};
+        $symval = $symbols{$sym . ':'} unless defined $symval;
+        $symval = $symbols{':' . $sym} unless defined $symval;
         if (defined $symval) {
           # Handle < and >.
           if (defined $prt && $prt eq '<') {
@@ -2493,11 +2581,14 @@ print ">>>> IN CONDITIONAL\n";
         }
       # Allow arithmetic on symbol
       } elsif ($operand =~ /^([<>]*)([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*([+-\\*\/])\s*[#]*(\$*[0-9a-fA-F]+)$/) {
+        ##FIXME -- need to handle < and > here.
         my $sym = $2;
-        my $op = $2;
-        my $opv = $3;
+        my $op = $3;
+        my $opv = $4;
         if (defined $sym) {
           my $symv = $symbols{$sym};
+          $symv = $symbols{$sym . ':'} unless defined $symv;
+          $symv = $symbols{':' . $sym} unless defined $symv;
           if (defined $symv) {
             $symbols{$symbol} = sprintf("\$%x", sym_op($symv, $op, $opv));
             print "%%%% Saving Symbol $symbol $symbols{$symbol}\n" if $verbose;
@@ -2558,22 +2649,30 @@ print ">>>> IN CONDITIONAL\n";
       # Allow symbol arithmetic.
       } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*([+-\\*\/])\s*[#]*(\$*[0-9a-fA-F]+)$/) {
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if (defined $symval) {
           if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
             $addr++;
           } elsif ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
             $addr += 2;
           }
+        #} else {
+        #  print_err("**** $lineno - Unknown symbol '$1' in '$line'\n");
         }
       # Allow symbols.
       } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*$/) {
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if (defined $symval) {
           if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
             $addr++;
           } elsif ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
             $addr += 2;
           }
+        #} else {
+        #  print_err("**** $lineno - Unknown symbol '$1' in '$line'\n");
         }
       } else {
         my @symbols = split(',', $operand);
@@ -2588,6 +2687,8 @@ print ">>>> IN CONDITIONAL\n";
           my $symval = get_symval($prt, $symbol);
           if (defined $symval) {
             push @bytes, sprintf("%02x", parse_symval($symval));
+          #} else {
+          #  print_err("**** $lineno - Unknown symbol '$sym' in '$line'\n");
           }
         }
         $addr += scalar(@bytes);
@@ -2643,6 +2744,8 @@ print ">>>>  DO  $operand\n";
       $in_conditional = 1;
       if ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if (defined $symval) {
           if ($symval =~ /\$([0-9a-fA-F]+)$/) {
             if (hex($1) > 0) {
@@ -2799,6 +2902,8 @@ print ">>>>  DO  $operand\n";
         if ($operand =~ /^([\<\>]*)([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
           my $prt = $1;
           my $symval = $symbols{$2};
+          $symval = $symbols{$2 . ':'} unless defined $symval;
+          $symval = $symbols{':' . $2} unless defined $symval;
           if (defined $symval) {
             # Handle < and >.
             if (defined $prt && $prt eq '<') {
@@ -2891,6 +2996,8 @@ print ">>>>  DO  $operand\n";
       # Allow symbol arithmetic.
       } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*([+-\\*\/])\s*[#]*(\$*[0-9a-fA-F]+)$/) {
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if (defined $symval) {
           if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
             $addr++;
@@ -2903,6 +3010,8 @@ print ">>>>  DO  $operand\n";
       # Allow symbols.
       } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*$/) {
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if (defined $symval) {
           if ($symval =~ /\$([0-9a-fA-F][0-9a-fA-F])$/) {
             $addr++;
@@ -3151,6 +3260,8 @@ print ">>>> END CONDITIONAL\n";
         $addr++;
       } elsif ($operand =~ /^#<(.+)/) {
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if (defined $symval) {
           my $opval = $symval;
           if ($symval =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
@@ -3164,6 +3275,8 @@ print ">>>> END CONDITIONAL\n";
         $addr++;
       } elsif ($operand =~ /^#>(.+)/) {
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if (defined $symval) {
           my $opval = $symval;
           if ($symval =~ /\$[0-9a-fA-F]*([0-9a-fA-F][0-9a-fA-F])$/) {
@@ -3374,6 +3487,8 @@ print ">>>>  END CONDITIONAL\n";
       # Return symbol value
       } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if ($symval =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
           $opval1 = hex(lc($1));
           $opval2 = hex(lc($2));
@@ -3390,6 +3505,8 @@ print ">>>>  END CONDITIONAL\n";
       } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[+]\s*[#]*(\$*[0-9a-fA-F]+)$/) {
         # Add
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if ($symval =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
           $opval1 = hex(lc($1));
           $opval2 = hex(lc($2));
@@ -3406,6 +3523,8 @@ print ">>>>  END CONDITIONAL\n";
       } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)\s*[-]\s*[#]*(\$*[0-9a-fA-F]+)$/) {
         # Subtract
         my $symval = $symbols{$1};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
         if ($symval =~ /^\$([0-9a-fA-F]{0,1}[0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])$/) {
           $opval1 = hex(lc($1));
           $opval2 = hex(lc($2));
@@ -3420,7 +3539,7 @@ print ">>>>  END CONDITIONAL\n";
         }
         ##FIXME -- need to do sub here
       #} else {
-      #  print ">>>> $lineno - Macro Bad Operand '$operand' in '$line'\n";
+      #  print_err(">>>> $lineno - Macro Bad Operand '$operand' in '$line'\n");
       }
 
       my $maclnno = 0;
