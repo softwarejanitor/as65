@@ -28,6 +28,8 @@ my $cur_macro = '';
 my $in_conditional = 0;
 my $skip = 0;
 
+my $edasm = 0;
+
 my $base = 0x800;  # Default base address.  Overide with -a (decimal) or -x (hex) from command line or .org or ORG directives in code.
 
 my $output_file = '';  # Output file, required to be set with -o command line flag.
@@ -58,6 +60,7 @@ sub usage {
   print " -c : Generated code listing (default on)\n";
   print " -e : Generated error summary (default on)\n";
   print " -C : Toggle color output (default on)\n";
+  print " -edasm : Toggle EDASM mode (default ooff)\n";
   print " -h : This help\n";
 }
 
@@ -117,6 +120,10 @@ while (defined $ARGV[0] && $ARGV[0] =~ /^-/) {
     $COUT_GREEN = "";
     $COUT_VIOLET = "";
     $COUT_AQUA = "";
+    shift;
+  # Toggle EDASM mode (default ooff).
+  } elsif ($ARGV[0] eq '-edasm') {
+    $edasm = 1;
     shift;
   # Help.
   } elsif ($ARGV[0] eq '-h') {
@@ -1002,13 +1009,13 @@ sub handle_8_bit_symbol {
   if (defined $symval) {
     my $opval = $symval;
     # $prt is used to specify the 1st or 2nd byte.
-    if (defined $prt && $prt eq '>') {
+    if (defined $prt && (($prt eq '>' && $edasm) || ($prt eq '<' && !$edasm))) {
       if ($symval =~ /^\$[0-9a-fA-F]{1,2}([0-9a-fA-F][0-9a-fA-F])$/) {
         $opval = hex(lc($1));
       } elsif ($symval =~ /^\$([0-9a-fA-F])$|^\$([0-9a-fA-F])$/) {
         $opval = hex(lc($1));
       }
-    } elsif (defined $prt && $prt eq '<') {
+    } elsif (defined $prt && (($prt eq '<' && $edasm) || ($prt = '>' && !$edasm))) {
       if ($symval =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
         $opval = hex(lc($1));
       } elsif ($symval =~ /^\$([0-9a-fA-F])$/) {
@@ -2970,12 +2977,12 @@ print ">>>>  DO  $operand\n";
           $symval = $symbols{':' . $2} unless defined $symval;
           if (defined $symval) {
             # Handle < and >.
-            if (defined $prt && $prt eq '<') {
+            if (defined $prt && (($prt eq '>' && $edasm) || ($prt eq '<' && !$edasm))) {
               if ($symval =~ /\$([0-9a-fA-F]{1,2})/) {
                 $symbols{$symbol} = $1;
                 print $COUT_AQUA . "%%%% Saving Symbol $symbol $1\n" . $COUT_NORMAL if $verbose;
               }
-            } elsif (defined $prt && $prt eq '>') {
+            } elsif (defined $prt && (($prt eq '<' && $edasm) || ($prt = '>' && !$edasm))) {
               if ($symval =~ /\$[0-9a-fA-F]*([0-9a-fA-F]{1,2})/) {
                 $symbols{$symbol} = $1;
                 print $COUT_AQUA . "%%%% Saving Symbol $symbol $1\n" . $COUT_NORMAL if $verbose;
