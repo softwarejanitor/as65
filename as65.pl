@@ -430,7 +430,7 @@ my %mnemonics = (
     # 		Absolute	CMP Abs		CD	3	4
     'Absolute' => 0xcd,
     # 		Absolute,X	CMP Abs,X	DD	3	4
-    'Absolute_X' => 0xd0,
+    'Absolute_X' => 0xdd,
     # 		Absolute,Y	CMP Abs,Y	D9	3	4
     'Absolute_Y' => 0xd9,
     # 		(Zero Page,X)	CMP (Zpg,X)	C1	2	6
