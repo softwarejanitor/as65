@@ -3400,7 +3400,7 @@ print ">>>> END CONDITIONAL\n";
         my $prt = $1;
         my $sym = $2;
         my $op = $3;
-        my $val = $4; 
+        my $val = $4;
         if ($val =~ /^\$([0-9a-fA-F]+)/) {
           $val = hex(lc($1));
         }
@@ -3488,6 +3488,12 @@ print ">>>> END CONDITIONAL\n";
       }
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
     } elsif ($ucmnemonic =~ /^DB$|^TYP$/) {
+        # GPH ADDED 201902016
+        my $prt = '';
+        if ($operand =~ /^([<>]*)/) {
+          $prt = $1;
+        }
+        #END GPH
       if ($operand =~ /^%([01]{8})/) {
         my $opval = unpack('C', pack("B8", $1));
         generate_8($ofh, $addr, $opval, $lineno, $line);
@@ -3499,7 +3505,28 @@ print ">>>> END CONDITIONAL\n";
         my $opval = hex(lc($1));
         generate_8($ofh, $addr, $opval, $lineno, $line);
         $addr++;
+        # GPH ADDED 20190216 support for db {symbol}
+      } elsif ($operand =~ /^([\<\>]*)([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
+        my $rawsym = $2;
+        my $opval1 = '';
+        my $opval2 = '';
+        my $symval = $symbols{$rawsym};
+        if ($prt =~ /^\>/) {       # LSB case
+          $symval =~ s/^\$//;
+          my $opval = sprintf("%04x", hex(lc($symval)));
+          $opval1 = hex(lc(substr($opval, 0, 2)));
+          generate_8($ofh, $addr, $opval1, $lineno, $line);
+          $addr++;
+        } else {
+          $symval =~ s/^\$//;
+          my $opval = sprintf("%04x", hex(lc($symval)));
+          $opval1 = hex(lc(substr($opval, 2, 2)));
+          generate_8($ofh, $addr, $opval1, $lineno, $line);
+          $addr++;
+        }
       }
+      # END GPH
+
     } elsif ($ucmnemonic =~ /^DA$|^\.DA$|^DW$/) {
       # Handle binary.
       if ($operand =~ /^%([01]{16})/) {
@@ -3541,7 +3568,22 @@ print ">>>> END CONDITIONAL\n";
       } elsif ($operand =~ /^\$([0-9a-fA-F][0-9a-fA-F])$/) {
         my $opval = hex(lc($1));
         generate_16($ofh, $addr, $opval, 0x00, $lineno, $line);
+      # GPH ADDED 20190216 symbol support
+      } elsif ($operand =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
+        my $rawsym = $1;
+        my $opval1 = '';
+        my $opval2 = '';
+        my $symval = $symbols{$rawsym};
+        $symval = $symbols{$1 . ':'} unless defined $symval;
+        $symval = $symbols{':' . $1} unless defined $symval;
+        $symval =~ s/^\$//;
+        my $opval = sprintf("%04x", hex(lc($symval)));
+        $opval1 = hex(lc(substr($opval, 0, 2)));
+        $opval2 = hex(lc(substr($opval, 2, 2)));
+        generate_16($ofh, $addr, $opval2, $opval1, $lineno, $line);
+        $addr += 2;
       }
+      #END GPH
     } elsif ($ucmnemonic =~ /HBY/) {
       ##FIXME -- implement this
     } elsif ($ucmnemonic =~ /BYT/) {
