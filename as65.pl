@@ -1176,6 +1176,10 @@ sub generate_Immediate {
 # TSB Zpg	04
 sub is_Zero_Page {
   my ($operand, $lineno) = @_;
+
+  # Don't mistake Accumulator mode for instructions like LSR.
+  return 0 if $operand =~ /^[Aa]$/;
+
   # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F]$/) {
     return 2;
@@ -1279,6 +1283,10 @@ sub generate_Zero_Page {
 # STZ Zpg,X	74
 sub is_Zero_Page_X {
   my ($operand, $lineno) = @_;
+
+  # Don't mistake Accumulator mode for instructions like LSR.
+  return 0 if $operand =~ /^[Aa]$/;
+
   # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F],[Xx]$/) {
     return 2;
@@ -1477,6 +1485,10 @@ sub generate_Zero_Page_Y {
 # TSB Abs	0C
 sub is_Absolute {
   my ($operand, $lineno) = @_;
+
+  # Don't mistake Accumulator mode for instructions like LSR.
+  return 0 if $operand =~ /^[Aa]$/;
+
   # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$/) {
     return 2;
@@ -1688,6 +1700,10 @@ sub generate_Indirect_Absolute_X {
 # STZ Abs,X	9E
 sub is_Absolute_X {
   my ($operand, $lineno) = @_;
+
+  # Don't mistake Accumulator mode for instructions like LSR.
+  return 0 if $operand =~ /^[Aa]$/;
+
   # Parse hex
   if ($operand =~ /^\$[0-9a-fA-F]{0,1}[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F],[Xx]$/) {
     return 2;
@@ -2292,6 +2308,7 @@ sub generate_Implied {
 # ROR A		6A
 sub is_Accumulator {
   my ($operand, $lineno) = @_;
+
   if ($operand =~ /^[Aa]$/ || $operand eq '') {
     return 1;
   }
