@@ -1031,6 +1031,9 @@ sub handle_8_bit_symbol {
       } else {
       }
     }
+    if ($opval =~ /^\$([0-9a-fA-F][0-9a-fA-F])/) {
+      $opval = hex(lc($1));
+    }
     if ($opval > 255) {
       $opval -= 256;
     }
@@ -2762,7 +2765,7 @@ print ">>>> IN CONDITIONAL\n";
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       ##FIXME -- implement this
-    } elsif ($ucmnemonic =~ /BYT/) {
+    } elsif ($ucmnemonic =~ /^BYT$/) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
@@ -2774,6 +2777,13 @@ print ">>>> IN CONDITIONAL\n";
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /BYTE/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      my @args = split /,/, $operand;
+      $addr += scalar @args * 2;
     } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END|SAV|\.TF|XC/) {
       # Just ignore this
     } elsif ($ucmnemonic =~ /MAC/) {
@@ -3143,7 +3153,7 @@ print ">>>>  DO  $operand\n";
         }
       }
       ##FIXME -- implement this
-    } elsif ($ucmnemonic =~ /BYT/) {
+    } elsif ($ucmnemonic =~ /^BYT$/) {
       if ($label ne '') {
         my $symbol = $label;
         $symbols{$symbol} = sprintf("\$%04x", $addr);
@@ -3155,6 +3165,13 @@ print ">>>>  DO  $operand\n";
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       ##FIXME -- implement this
+    } elsif ($ucmnemonic =~ /BYTE/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      my @args = split /,/, $operand;
+      $addr += scalar @args * 2;
     } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END|SAV|\.TF|XC/) {
       # Just ignore this
     } elsif ($ucmnemonic =~ /MAC/) {
@@ -3286,8 +3303,12 @@ print ">>>> END CONDITIONAL\n";
     # Parse input lines.
     my ($label, $mnemonic, $operand, $comment) = parse_line($line, $lineno);
 
-    next unless defined $mnemonic;
-    next if $mnemonic eq '';
+    #next unless defined $mnemonic;
+    #next if $mnemonic eq '';
+    if (!defined $mnemonic || $mnemonic eq '') {
+      print sprintf("                 %-4d  %s\n", $lineno, $line) if $code_listing;
+      next;
+    }
 
     my $ucmnemonic = uc($mnemonic);
 
@@ -3526,7 +3547,6 @@ print ">>>> END CONDITIONAL\n";
         }
       }
       # END GPH
-
     } elsif ($ucmnemonic =~ /^DA$|^\.DA$|^DW$/) {
       # Handle binary.
       if ($operand =~ /^%([01]{16})/) {
@@ -3586,10 +3606,24 @@ print ">>>> END CONDITIONAL\n";
       #END GPH
     } elsif ($ucmnemonic =~ /HBY/) {
       ##FIXME -- implement this
-    } elsif ($ucmnemonic =~ /BYT/) {
+      print "NOT YET IMPLEMENTED!\n";
+    } elsif ($ucmnemonic =~ /^BYT$/) {
       ##FIXME -- implement this
+      print "NOT YET IMPLEMENTED!\n";
     } elsif ($ucmnemonic =~ /DFS/) {
       ##FIXME -- implement this
+      print "NOT YET IMPLEMENTED!\n";
+    } elsif ($ucmnemonic =~ /BYTE/) {
+      my @args = split /,/, $operand;
+      my @bytes = ();
+      foreach my $opval (@args) {
+        if ($opval =~ /^\d+$/) {
+          push @bytes, $opval;
+          $addr++;
+##FIXME -- probably should handle binary, hex and symbols here too.
+        }
+      }
+      generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
     } elsif ($ucmnemonic =~ /MAC/) {
       # Ignore on subsequent passes.
     } elsif ($ucmnemonic =~ /\<\<\</) {
