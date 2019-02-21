@@ -2328,6 +2328,7 @@ sub parse_line {
   my ($line, $lineno) = @_;
 
   my ($label, $mnemonic, $operand, $comment) = ('', '', '', '');
+
   if ($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s*(;.*)$/) {
     $label = $1;
     $mnemonic = $2;
@@ -2523,13 +2524,13 @@ if (open($ifh, "<$input_file")) {
     }
 
     # Handle include files.
-    if ($line =~ /^#include "([^"]+)"\s*\;*.*/) {
+    if ($line =~ /^#include\s+"([^"]+)"\s*\;*.*/ || $line =~ /^\.include\s+"([^"]+)"\s*\;*.*/) {
       if (open($ififh, "<$1")) {
         print $COUT_GREEN . "---- INCLUDING $1 ----\n" . $COUT_NORMAL if $debug;
         $in_include = 1;
         $ilineno = 0;
       } else {
-        print_err("**** Unable to open $1\n");
+        print_err("**** Unable to open $1 - '$line'\n");
       }
       next;
     }
@@ -2800,6 +2801,13 @@ print ">>>> IN CONDITIONAL\n";
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       my @args = split /,/, $operand;
+      $addr += scalar @args;
+    } elsif ($ucmnemonic =~ /WORD/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      my @args = split /,/, $operand;
       $addr += scalar @args * 2;
     } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END|SAV|\.TF|XC/) {
       # Just ignore this
@@ -2912,12 +2920,12 @@ print ">>>>  DO  $operand\n";
     #print sprintf("%04x:  %-4d  %s\n", $addr, $lineno, $line) if $listing;
 
     # Handle include files.
-    if ($line =~ /^#include "([^"]+)"\s*\;*.*/) {
+    if ($line =~ /^#include\s+"([^"]+)"\s*\;*.*/ || $line =~ /^\.include\s+"([^"]+)"\s*\;*.*/) {
       if (open($ififh, "<$1")) {
         $in_include = 1;
         $ilineno = 0;
       } else {
-        print_err("**** Unable to open $1\n");
+        print_err("**** Unable to open $1 - '$line'\n");
       }
       next;
     }
@@ -3188,6 +3196,13 @@ print ">>>>  DO  $operand\n";
         $symbols{$symbol} = sprintf("\$%04x", $addr);
       }
       my @args = split /,/, $operand;
+      $addr += scalar @args;
+    } elsif ($ucmnemonic =~ /WORD/) {
+      if ($label ne '') {
+        my $symbol = $label;
+        $symbols{$symbol} = sprintf("\$%04x", $addr);
+      }
+      my @args = split /,/, $operand;
       $addr += scalar @args * 2;
     } elsif ($ucmnemonic =~ /OBJ|CHK|LST|END|SAV|\.TF|XC/) {
       # Just ignore this
@@ -3301,12 +3316,12 @@ print ">>>> END CONDITIONAL\n";
     chomp $line;
 
     # Handle include files.
-    if ($line =~ /^#include "([^"]+)"\s*\;*.*/) {
+    if ($line =~ /^#include\s+"([^"]+)"\s*\;*.*/ || $line =~ /^\.include\s+"([^"]+)"\s*\;*.*/) {
       if (open($ififh, "<$1")) {
         $in_include = 1;
         $ilineno = 0;
       } else {
-        print_err("**** Unable to open $1\n");
+        print_err("**** Unable to open $1 - '$line'\n");
       }
       next;
     }
@@ -3634,10 +3649,63 @@ print ">>>> END CONDITIONAL\n";
       my @args = split /,/, $operand;
       my @bytes = ();
       foreach my $opval (@args) {
-        if ($opval =~ /^\d+$/) {
+        # Binary
+        if ($opval =~ /^%([01]{8})/) {
+          push @bytes, unpack('C', pack("B8", $1));
+          $addr++;
+        # Decimal
+        } elsif ($opval =~ /^\d+$/) {
           push @bytes, $opval;
           $addr++;
-##FIXME -- probably should handle binary, hex and symbols here too.
+        # Hex
+        } elsif ($opval =~ /^\$([0-9a-fA-F]+)$/) {
+          my $ov = sprintf("%02x", hex(lc($1)));
+          push @bytes, hex(lc($ov));
+          $addr++;
+        ##FIXME -- probably should handle symbols here too.
+        }
+      }
+      generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
+    } elsif ($ucmnemonic =~ /WORD/) {
+      my @args = split /,/, $operand;
+      my @bytes = ();
+      foreach my $opval (@args) {
+        # Binary
+        if ($opval =~ /^%([01]{16})/) {
+          my $ov1 = unpack('C', pack("B8", substr($1, 0, 8)));
+          my $ov2 = unpack('C', pack("B8", substr($1, 8, 8)));
+          push @bytes, $ov1;
+          push @bytes, $ov2;
+          $addr += 2;
+        # Decimal
+        } elsif ($opval =~ /^(\d+)$/) {
+          my $ov = sprintf("%04x", $1);
+          my $ov1 = hex(lc(substr($ov, 0, 2)));
+          my $ov2 = hex(lc(substr($ov, 2, 2)));
+          push @bytes, $ov1;
+          push @bytes, $ov2;
+          $addr += 2;
+        # Hex
+        } elsif ($opval =~ /^\$([0-9a-fA-F]+)$/) {
+          my $ov = sprintf("%04x", hex(lc($1)));
+          my $ov1 = hex(lc(substr($ov, 0, 2)));
+          my $ov2 = hex(lc(substr($ov, 2, 2)));
+          push @bytes, $ov1;
+          push @bytes, $ov2;
+        # Symbol
+        } elsif ($opval =~ /^([0-9A-Za-z\.\?:][A-Za-z0-9_\.\?:]*)$/) {
+          my $rawsym = $1;
+          my $ov1 = '';
+          my $ov2 = '';
+          my $symval = $symbols{$rawsym};
+          $symval = $symbols{$1 . ':'} unless defined $symval;
+          $symval = $symbols{':' . $1} unless defined $symval;
+          $symval =~ s/^\$//;
+          my $ov = sprintf("%04x", hex(lc($symval)));
+          $ov1 = hex(lc(substr($ov, 0, 2)));
+          $ov2 = hex(lc(substr($ov, 2, 2)));
+          push @bytes, $ov1;
+          push @bytes, $ov2;
         }
       }
       generate_bytes($ofh, $addr, \@bytes, $lineno, $line);
