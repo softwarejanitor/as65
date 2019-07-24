@@ -1096,6 +1096,8 @@ sub is_Immediate {
   # Parse ASCII
   } elsif ($operand =~ /^#"(.)["]*$/) {
     return 2;
+  } elsif ($operand =~ /^#'(.)[']*$/) {
+    return 2;
   # Handle symbols.
   } elsif ($operand =~ /^#[<>]*\(*([0-9A-Za-z_\.\?:][A-Za-z0-9_\.\?:]*)\)*$/) {
     return 2;
@@ -1129,6 +1131,8 @@ sub generate_Immediate {
     generate_16($ofh, $addr, $opcode, $1, $lineno, $line);
   # Parse ASCII
   } elsif ($operand =~ /^#"(.)["]*$/) {
+    generate_16($ofh, $addr, $opcode, ord($1), $lineno, $line);
+  } elsif ($operand =~ /^#'(.)[']*$/) {
     generate_16($ofh, $addr, $opcode, ord($1), $lineno, $line);
   # Handle symbol
   } elsif ($operand =~ /^#([<>]*)\(*([0-9A-Za-z_\.\?:][A-Za-z0-9_\.\?:]*)\)*/) {
@@ -2334,6 +2338,30 @@ sub parse_line {
     $mnemonic = $2;
     $operand = $3;
     $comment = $4;
+  # Fix fir LABEL ASC 'text' ; comment
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(['].+['])\s*(;.*)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $4;
+  # Fix fir ASC 'text' ; comment
+  } elsif ($line =~ /^\s+(\S+)\s+(['].+['])\s*(;.*)$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = $4;
+  # Fix fir LABEL ASC 'text'
+  } elsif ($line =~ /^(\S+)\s+(\S+)\s+(['].+['])\s*$/) {
+    $label = $1;
+    $mnemonic = $2;
+    $operand = $3;
+    $comment = '';
+  # Fix fir ASC 'text'
+  } elsif ($line =~ /^\s+(\S+)\s+(['].+['])\s*$/) {
+    $label = '';
+    $mnemonic = $1;
+    $operand = $2;
+    $comment = '';
   } elsif ($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s*$/) {
     $label = $1;
     $mnemonic = $2;
@@ -2773,6 +2801,9 @@ print ">>>> IN CONDITIONAL\n";
       } elsif ($operand =~ /^'(.+)'([0-9a-fA-F]*)$/) {
         $str = $1;
         $trl = $2;
+      } elsif ($operand =~ /^'(.+)'\s*$/) {
+        $str = $1;
+        $trl = '';
       }
       $addr += (length($str) - 1);
       $addr++ if defined $trl;
@@ -3378,6 +3409,12 @@ print ">>>> END CONDITIONAL\n";
       } elsif ($operand =~ /^'(.+)'([0-9a-fA-F]*)$/) {
         $str = $1;
         $trl = $2;
+      } elsif ($operand =~ /^'(.+)'\s*$/) {
+        $str = $1;
+        $trl = '';
+      } elsif ($operand =~ /^'(.+)'\s*$/) {
+        $str = $1;
+        $trl = '';
       } elsif ($operand =~ /^\"(.+)\",([0-9a-fA-F]*)$/) {
         $str = $1;
         $trl = $2;
